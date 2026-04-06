@@ -75,18 +75,42 @@ export const mockMarketData: MarketData = {
 export const mockNews: NewsItem[] = [
   {
     id: 'n1',
-    title: 'Global Markets Brace for Inflation Data',
-    description: 'Investors are cautious ahead of the upcoming CPI release...',
-    source: 'Reuters',
+    title: 'OPEC+ Signals Potential Output Cuts',
+    description: 'Member nations are discussing a production decrease to stabilize energy prices amidst global economic uncertainty.',
+    source: 'Financial Times',
     url: '#',
-    publishedAt: new Date().toISOString()
+    publishedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString()
   },
   {
     id: 'n2',
-    title: 'Amazon Basin Sees Record Deforestation',
-    description: 'New satellite data shows a concerning spike in land clearing...',
-    source: 'GNews',
+    title: 'Arctic Ice Melt Reaches Historic Levels',
+    description: 'New satellite data shows record low ice coverage, potentially disrupting North Atlantic shipping lanes.',
+    source: 'National Geographic',
     url: '#',
-    publishedAt: new Date().toISOString()
+    publishedAt: new Date(Date.now() - 1000 * 60 * 120).toISOString()
+  },
+  {
+    id: 'n3',
+    title: 'Major Solar Flare Could Impact Satellite Comms',
+    description: 'NOAA warns of a G4-class geomagnetic storm that may interfere with GPS and telecommunications infrastructure.',
+    source: 'Space.com',
+    url: '#',
+    publishedAt: new Date(Date.now() - 1000 * 60 * 180).toISOString()
+  },
+  {
+    id: 'n4',
+    title: 'Federal Reserve Hints at Extended High Rates',
+    description: 'The FOMC minutes suggest a more cautious approach to rate cuts than previously anticipated by the market.',
+    source: 'Bloomberg',
+    url: '#',
+    publishedAt: new Date(Date.now() - 1000 * 60 * 240).toISOString()
+  },
+  {
+    id: 'n5',
+    title: 'South China Sea Tensions Escalate',
+    description: 'Naval maneuvers in contested waters trigger concerns over regional trade security and maritime insurance premiums.',
+    source: 'Reuters',
+    url: '#',
+    publishedAt: new Date(Date.now() - 1000 * 60 * 300).toISOString()
   }
 ];

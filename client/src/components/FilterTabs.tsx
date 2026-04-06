@@ -5,10 +5,10 @@ const FilterTabs: React.FC = () => {
   const { activeFilter, setActiveFilter } = useDashboardStore();
 
   const tabs = [
-    { id: 'all', label: 'ALL' },
-    { id: 'environmental', label: 'ENV' },
-    { id: 'market', label: 'MKT' },
-    { id: 'weather', label: 'WXR' }
+    { id: 'all', label: 'GLOBAL' },
+    { id: 'environmental', label: 'ENVIRONMENTAL' },
+    { id: 'market', label: 'MARKET' },
+    { id: 'weather', label: 'WEATHER' }
   ];
 
   return (

@@ -16,60 +16,29 @@ const FearGreedMeter: React.FC = () => {
     return () => clearInterval(timer);
   }, [fearGreedScore]);
 
-  const radius = 80;
-  const stroke = 12;
-  const normalizedRadius = radius - stroke * 2;
-  const circumference = normalizedRadius * Math.PI;
-  const strokeDashoffset = circumference - (displayScore / 100) * circumference;
-
   const getColor = () => {
-    if (displayScore < 20) return '#E24B4A'; // Extreme Fear
-    if (displayScore < 40) return '#EF9F27'; // Fear
-    if (displayScore < 60) return '#F4C0D1'; // Neutral
-    if (displayScore < 80) return '#5DCAA5'; // Greed
-    return '#378ADD'; // Extreme Greed
+    if (displayScore < 20) return '#E24B4A';
+    if (displayScore < 40) return '#EF9F27';
+    if (displayScore < 60) return '#F4C0D1';
+    if (displayScore < 80) return '#5DCAA5';
+    return '#378ADD';
   };
 
   return (
-    <div className="bg-[#111320] border border-white/5 rounded-xl p-4 flex flex-col items-center">
-      <h3 className="text-gray-400 text-[10px] uppercase tracking-wider mb-4 font-bold">Fear & Greed Index</h3>
-      
-      <div className="relative w-40 h-24 overflow-hidden">
-        <svg height={radius * 2} width={radius * 2} className="transform -rotate-180 -translate-y-1/2">
-          {/* Background Arc */}
-          <circle
-            stroke="rgba(255,255,255,0.05)"
-            fill="transparent"
-            strokeWidth={stroke}
-            r={normalizedRadius}
-            cx={radius}
-            cy={radius}
-            strokeDasharray={`${circumference} ${circumference}`}
-            style={{ strokeDashoffset: 0 }}
+    <div className="bg-[#111320]/80 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3 shadow-2xl">
+      <div className="flex items-center space-x-3">
+        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest shrink-0">Sentiment</span>
+        <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${displayScore}%`, backgroundColor: getColor() }}
           />
-          {/* Progress Arc */}
-          <circle
-            stroke={getColor()}
-            fill="transparent"
-            strokeWidth={stroke}
-            strokeDasharray={`${circumference} ${circumference}`}
-            style={{ strokeDashoffset, transition: 'stroke-dashoffset 0.5s ease, stroke 0.5s ease' }}
-            r={normalizedRadius}
-            cx={radius}
-            cy={radius}
-          />
-        </svg>
-        
-        {/* Score Display */}
-        <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center">
-          <span className="text-3xl font-black text-white leading-none">{displayScore}</span>
-          <span className="text-[10px] font-bold uppercase mt-1" style={{ color: getColor() }}>
-            {fearGreedLabel}
-          </span>
         </div>
+        <span className="text-[18px] font-black text-white leading-none shrink-0 tabular-nums">{displayScore}</span>
+        <span className="text-[9px] font-black uppercase tracking-widest shrink-0" style={{ color: getColor() }}>
+          {fearGreedLabel}
+        </span>
       </div>
-
-      <p className="text-gray-600 text-[9px] mt-2">Updated 60s ago</p>
     </div>
   );
 };

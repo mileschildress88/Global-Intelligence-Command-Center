@@ -3,7 +3,10 @@ const cors = require('cors');
 const axios = require('axios');
 const NodeCache = require('node-cache');
 const rateLimit = require('express-rate-limit');
-require('dotenv').config();
+const Parser = require('rss-parser');
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+
+const rssParser = new Parser({ timeout: 8000 });
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -65,16 +68,26 @@ app.get('/api/market/stocks', async (req, res) => {
 
   try {
     const symbols = ['SPY', 'QQQ', '^VIX'];
-    const results = await Promise.all(symbols.map(s => 
-      axios.get(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${s}&apikey=${apiKey}`)
-    ));
+    const delay = (ms) => new Promise(r => setTimeout(r, ms));
+    const results = [];
+    for (const s of symbols) {
+      const r = await axios.get(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${s}&apikey=${apiKey}`);
+      results.push(r);
+      await delay(200);
+    }
     const data = results.reduce((acc, curr, i) => {
       acc[symbols[i]] = curr.data['Global Quote'];
       return acc;
     }, {});
+    // Alpha Vantage returns empty Global Quote on rate limit — detect and fail clearly
+    if (!data['SPY'] || Object.keys(data['SPY']).length === 0) {
+      console.warn('Alpha Vantage rate limited or key invalid');
+      return res.status(429).json({ error: 'Rate limited' });
+    }
     cache.set(cacheKey, data, 300);
     res.json(data);
   } catch (error) {
+    console.error('Stock API error:', error?.response?.data || error.message);
     res.status(500).json({ error: 'Failed to fetch stock data' });
   }
 });
@@ -103,10 +116,22 @@ app.get('/api/weather', async (req, res) => {
   if (cachedData) return res.set('X-Cache', 'HIT').json(cachedData);
 
   const cities = [
-    { name:'Delhi',     lat:28.6,   lng:77.2  },
-    { name:'Phoenix',   lat:33.4,   lng:-112.0 },
-    { name:'Sydney',    lat:-33.8,  lng:151.2  },
-    { name:'Cairo',     lat:30.0,   lng:31.2   }
+    { name:'Delhi',        lat:28.6,   lng:77.2   },
+    { name:'Phoenix',      lat:33.4,   lng:-112.0  },
+    { name:'Sydney',       lat:-33.8,  lng:151.2   },
+    { name:'Cairo',        lat:30.0,   lng:31.2    },
+    { name:'São Paulo',    lat:-23.5,  lng:-46.6   },
+    { name:'Lagos',        lat:6.5,    lng:3.4     },
+    { name:'Moscow',       lat:55.7,   lng:37.6    },
+    { name:'Tokyo',        lat:35.7,   lng:139.7   },
+    { name:'Los Angeles',  lat:34.0,   lng:-118.2  },
+    { name:'Jakarta',      lat:-6.2,   lng:106.8   },
+    { name:'Karachi',      lat:24.9,   lng:67.0    },
+    { name:'Miami',        lat:25.8,   lng:-80.2   },
+    { name:'Cape Town',    lat:-33.9,  lng:18.4    },
+    { name:'Riyadh',       lat:24.7,   lng:46.7    },
+    { name:'London',       lat:51.5,   lng:-0.1    },
+    { name:'Beijing',      lat:39.9,   lng:116.4   }
   ];
 
   try {
@@ -121,39 +146,100 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 
-// News Proxy (GNews)
+// News Proxy (RSS — no API key required)
 app.get('/api/news', async (req, res) => {
   const cacheKey = 'news_data';
   const cachedData = cache.get(cacheKey);
   if (cachedData) return res.set('X-Cache', 'HIT').json(cachedData);
 
-  const apiKey = process.env.GNEWS_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Missing API Key' });
+  const feeds = [
+    'https://feeds.bbci.co.uk/news/world/rss.xml',
+    'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+    'https://feeds.reuters.com/reuters/topNews',
+    'https://www.aljazeera.com/xml/rss/all.xml',
+  ];
 
   try {
-    const response = await axios.get(`https://gnews.io/api/v4/search?q=climate+crisis+OR+flood+OR+wildfire+OR+market+crash&lang=en&max=10&token=${apiKey}`);
-    cache.set(cacheKey, response.data, 300);
-    res.json(response.data);
+    const results = await Promise.allSettled(feeds.map(url => rssParser.parseURL(url)));
+    const articles = [];
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      for (const item of (result.value.items || []).slice(0, 5)) {
+        articles.push({
+          title: item.title || '',
+          description: item.contentSnippet || item.summary || '',
+          source: { name: result.value.title || 'RSS' },
+          publishedAt: item.pubDate || item.isoDate || new Date().toISOString(),
+          url: item.link || '',
+        });
+      }
+    }
+    // Sort by date, newest first, cap at 20
+    articles.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    const payload = { articles: articles.slice(0, 20) };
+    cache.set(cacheKey, payload, 300);
+    res.json(payload);
   } catch (error) {
+    console.error('News RSS error:', error.message);
     res.status(500).json({ error: 'Failed to fetch news data' });
   }
 });
 
-// Gemini AI Proxy
+// CNN Fear & Greed Index
+app.get('/api/feargreed', async (req, res) => {
+  const cacheKey = 'feargreed_data';
+  const cachedData = cache.get(cacheKey);
+  if (cachedData) return res.set('X-Cache', 'HIT').json(cachedData);
+
+  try {
+    const response = await axios.get('https://production.dataviz.cnn.io/index/fearandgreed/graphdata', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.cnn.com/',
+        'Accept': 'application/json',
+      }
+    });
+    const fg = response.data.fear_and_greed;
+    const payload = {
+      score: Math.round(fg.score),
+      rating: fg.rating,
+      previousClose: Math.round(fg.previous_close),
+      previousWeek: Math.round(fg.previous_1_week),
+      previousMonth: Math.round(fg.previous_1_month),
+      timestamp: fg.timestamp,
+    };
+    cache.set(cacheKey, payload, 300);
+    res.json(payload);
+  } catch (error) {
+    console.error('Fear & Greed error:', error?.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to fetch Fear & Greed data' });
+  }
+});
+
+// Groq AI Proxy (free tier — get key at console.groq.com)
 app.post('/api/ai/analyze', async (req, res) => {
   const { prompt } = req.body;
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Missing API Key' });
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'Missing GROQ_API_KEY' });
 
   try {
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
-        contents: [{ parts: [{ text: prompt }] }]
+        model: 'llama-3.1-8b-instant',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 400
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
       }
     );
     res.json(response.data);
   } catch (error) {
+    console.error('Groq API error:', error?.response?.data || error.message);
     res.status(500).json({ error: 'AI Analysis failed' });
   }
 });
