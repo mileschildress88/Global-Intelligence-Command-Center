@@ -50,7 +50,7 @@ app.get('/api/market/crypto', async (req, res) => {
         include_24hr_change: 'true'
       }
     });
-    cache.set(cacheKey, response.data, 60);
+    cache.set(cacheKey, response.data, 120); // 2 min — matches client poll interval
     res.json(response.data);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch crypto data' });
@@ -84,7 +84,7 @@ app.get('/api/market/stocks', async (req, res) => {
       console.warn('Alpha Vantage rate limited or key invalid');
       return res.status(429).json({ error: 'Rate limited' });
     }
-    cache.set(cacheKey, data, 300);
+    cache.set(cacheKey, data, 4 * 60 * 60); // 4 hours — Alpha Vantage is 25 req/day
     res.json(data);
   } catch (error) {
     console.error('Stock API error:', error?.response?.data || error.message);
@@ -208,7 +208,7 @@ app.get('/api/feargreed', async (req, res) => {
       previousMonth: Math.round(fg.previous_1_month),
       timestamp: fg.timestamp,
     };
-    cache.set(cacheKey, payload, 300);
+    cache.set(cacheKey, payload, 10 * 60); // 10 min — matches client poll interval
     res.json(payload);
   } catch (error) {
     console.error('Fear & Greed error:', error?.response?.data || error.message);

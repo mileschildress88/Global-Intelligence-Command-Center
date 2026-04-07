@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode, useState } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useState, useEffect } from 'react';
 import Globe3D from './components/Globe3D';
 import FearGreedMeter from './components/FearGreedMeter';
 import AssetTicker from './components/AssetTicker';
@@ -32,7 +32,12 @@ const GICCContent: React.FC = () => {
   usePolling();
   const { signals, signalsIsLive, setSelectedSignal } = useDashboardStore();
   const [sidebarTab, setSidebarTab] = useState<'news' | 'signals'>('news');
-  const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const [clock, setClock] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setClock(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <div className="flex flex-col h-screen w-full bg-[#0A0C14] text-[#EEEEF0] overflow-hidden font-sans selection:bg-blue-500/30 relative">
@@ -66,7 +71,9 @@ const GICCContent: React.FC = () => {
 
         <div className="flex items-center space-x-8">
           <div className="flex flex-col items-end">
-            <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest leading-none tabular-nums font-mono">{timestamp}</span>
+            <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest leading-none tabular-nums font-mono">
+              {clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
             <div className="flex items-center space-x-1 mt-1">
               <span className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
               <span className="text-[9px] font-bold text-blue-400/80 uppercase tracking-widest animate-pulse">Data Sync Active</span>

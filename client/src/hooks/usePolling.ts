@@ -153,25 +153,11 @@ export const usePolling = () => {
     }
   };
 
-  // --- Market: crypto and stocks independent ---
-  const fetchMarket = async () => {
-    let cryptoData: any = null;
-    let stocksData: any = null;
+  // Shared ref so crypto and stocks can merge into one marketData update
+  const latestCryptoRef = useRef<any>(null);
+  const latestStocksRef = useRef<any>(null);
 
-    try {
-      const res = await axios.get(`${API_BASE}/market/crypto`);
-      cryptoData = res.data;
-    } catch (e) {
-      console.warn('Crypto API failed, using mock');
-    }
-
-    try {
-      const res = await axios.get(`${API_BASE}/market/stocks`);
-      stocksData = res.data;
-    } catch (e) {
-      console.warn('Stocks API failed, using mock');
-    }
-
+  const applyMarketData = (cryptoData: any, stocksData: any) => {
     const mock = mockMarketData;
     const newData = {
       btc: cryptoData?.bitcoin ? { price: cryptoData.bitcoin.usd, change24h: cryptoData.bitcoin.usd_24h_change } : mock.btc,
@@ -183,11 +169,37 @@ export const usePolling = () => {
       eurUsd: 1.08,
       gbpUsd: 1.26,
     };
-
     setMarketData(newData, cryptoData !== null);
     ['BTC', 'ETH', 'SOL', 'SPY', 'QQQ', 'VIX'].forEach(asset => {
       appendPriceHistory(asset, (newData as any)[asset.toLowerCase()].price);
     });
+  };
+
+  // CoinGecko — free tier, poll every 2 min
+  const fetchCrypto = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/market/crypto`);
+      latestCryptoRef.current = res.data;
+    } catch (e) {
+      console.warn('Crypto API failed, using mock');
+    }
+    applyMarketData(latestCryptoRef.current, latestStocksRef.current);
+  };
+
+  // Alpha Vantage — 25 req/day (3 symbols = max 8 fetches/day), poll every 4 hours
+  const fetchStocks = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/market/stocks`);
+      latestStocksRef.current = res.data;
+    } catch (e) {
+      console.warn('Stocks API failed, using mock');
+    }
+    applyMarketData(latestCryptoRef.current, latestStocksRef.current);
+  };
+
+  // Initial load: fetch both simultaneously
+  const fetchMarket = async () => {
+    await Promise.all([fetchCrypto(), fetchStocks()]);
   };
 
   // --- News + signals from news ---
@@ -286,12 +298,25 @@ Write 4 authoritative sentences synthesizing current market conditions. Identify
     };
     init();
 
-    const marketInterval = setInterval(() => { fetchMarket(); fetchFearGreed(); }, 60000);
-    const newsInterval = setInterval(fetchNews, 300000);
-    const aiInterval = setInterval(() => runAIAnalysis(), 300000);
+    // CoinGecko: free tier ~30 req/min — poll every 2 minutes
+    const cryptoInterval = setInterval(fetchCrypto, 2 * 60 * 1000);
+
+    // Alpha Vantage: 25 req/DAY (3 symbols per call = max 8 fetches/day) — poll every 4 hours
+    const stocksInterval = setInterval(fetchStocks, 4 * 60 * 60 * 1000);
+
+    // CNN Fear & Greed: unofficial endpoint, data changes slowly — poll every 10 minutes
+    const fearGreedInterval = setInterval(fetchFearGreed, 10 * 60 * 1000);
+
+    // RSS news: no hard limits, content refreshes every ~15 min — poll every 5 minutes
+    const newsInterval = setInterval(fetchNews, 5 * 60 * 1000);
+
+    // Groq AI: 14,400 req/day — auto-briefing every 5 minutes, plus 5s cooldown guard
+    const aiInterval = setInterval(() => runAIAnalysis(), 5 * 60 * 1000);
 
     return () => {
-      clearInterval(marketInterval);
+      clearInterval(cryptoInterval);
+      clearInterval(stocksInterval);
+      clearInterval(fearGreedInterval);
       clearInterval(newsInterval);
       clearInterval(aiInterval);
     };
