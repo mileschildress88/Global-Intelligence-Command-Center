@@ -66,24 +66,28 @@ function extractLocation(text: string): { lat: number; lng: number; label: strin
 
 function classifyArticle(text: string, feedCategory?: string): { type: CrisisSignal['type']; severity: CrisisSignal['severity'] } {
   const lower = text.toLowerCase();
-  const criticalWords = ['war', 'attack', 'killed', 'dead', 'collapse', 'crash', 'crisis', 'emergency', 'explosion', 'strike', 'invasion', 'missile', 'nuclear', 'catastrophe', 'plunge', 'plummets'];
-  const warningWords = ['tension', 'threat', 'risk', 'sanction', 'protest', 'unrest', 'decline', 'concern', 'warning', 'volatile', 'drops', 'falls', 'slump', 'dispute'];
+
+  const criticalWords = ['war', 'attack', 'killed', 'dead', 'collapse', 'crash', 'crisis', 'emergency', 'explosion', 'invasion', 'missile', 'nuclear', 'catastrophe', 'plunge', 'bombing', 'massacre'];
+  const warningWords = ['tension', 'threat', 'risk', 'sanction', 'protest', 'unrest', 'decline', 'concern', 'warning', 'volatile', 'drops', 'falls', 'slump', 'dispute', 'arrested', 'detained'];
   const severity: CrisisSignal['severity'] = criticalWords.some(w => lower.includes(w)) ? 'critical'
     : warningWords.some(w => lower.includes(w)) ? 'warning' : 'info';
 
-  let type: CrisisSignal['type'];
-  if (feedCategory === 'environmental') type = 'environmental';
-  else if (feedCategory === 'market') type = 'market';
-  else if (feedCategory === 'weather') type = 'weather';
-  else {
-    const marketWords = ['stock', 'market', 'economy', 'gdp', 'fed', 'rate', 'crypto', 'bitcoin', 'bank', 'inflation', 'trade', 'tariff', 'nasdaq', 'dow', 's&p', 'bond', 'yield', 'dollar', 'recession'];
-    const envWords = ['climate', 'flood', 'wildfire', 'earthquake', 'tsunami', 'drought', 'pollution', 'emissions', 'carbon', 'glacier', 'sea level', 'famine', 'deforestation'];
-    const weatherWords = ['hurricane', 'typhoon', 'cyclone', 'tornado', 'storm', 'heatwave', 'blizzard', 'snowstorm'];
-    type = weatherWords.some(w => lower.includes(w)) ? 'weather'
-      : envWords.some(w => lower.includes(w)) ? 'environmental'
-      : marketWords.some(w => lower.includes(w)) ? 'market'
-      : 'environmental';
-  }
+  // Feed-category feeds get their type directly — most reliable signal
+  if (feedCategory === 'environmental') return { type: 'environmental', severity };
+  if (feedCategory === 'market')        return { type: 'market', severity };
+  if (feedCategory === 'weather')       return { type: 'weather', severity };
+
+  // For 'global' category feeds, use keywords — but default to geopolitical (not environmental)
+  const weatherWords = ['hurricane', 'typhoon', 'cyclone', 'tornado', 'storm', 'heatwave', 'blizzard', 'snowstorm', 'flooding rain', 'severe weather'];
+  const envWords    = ['climate change', 'wildfire', 'earthquake', 'tsunami', 'drought', 'pollution', 'emissions', 'carbon', 'glacier', 'sea level', 'deforestation', 'flood damage'];
+  const marketWords = ['stock market', 'economy', 'gdp', 'federal reserve', 'interest rate', 'crypto', 'bitcoin', 'bank', 'inflation', 'tariff', 'nasdaq', 'dow jones', 'bond yield', 'recession', 'trade war'];
+
+  const type: CrisisSignal['type'] =
+    weatherWords.some(w => lower.includes(w)) ? 'weather'
+    : envWords.some(w => lower.includes(w))   ? 'environmental'
+    : marketWords.some(w => lower.includes(w)) ? 'market'
+    : 'geopolitical'; // default for global feeds: elections, crime, military, diplomacy, etc.
+
   return { type, severity };
 }
 
@@ -198,9 +202,9 @@ export const usePolling = () => {
   const fetchFearGreed = async () => {
     try {
       const res = await axios.get(`${API_BASE}/feargreed`);
-      const { score, rating } = res.data;
+      const { score, rating, previousClose, previousWeek, previousMonth } = res.data;
       const label = rating.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      updateFearGreed(score, label);
+      updateFearGreed(score, label, previousClose ?? 0, previousWeek ?? 0, previousMonth ?? 0);
     } catch (e) { console.warn('Fear & Greed fetch failed'); }
   };
 

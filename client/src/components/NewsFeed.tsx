@@ -2,10 +2,10 @@ import React from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
 
 const CATEGORY_STYLES: Record<string, string> = {
-  environmental: 'text-teal-400 bg-teal-500/10 border-teal-500/30',
+  environmental: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
   market:        'text-blue-400 bg-blue-500/10 border-blue-500/30',
   weather:       'text-pink-400 bg-pink-500/10 border-pink-500/30',
-  global:        'text-gray-400 bg-white/5 border-white/10',
+  global:        'text-purple-400 bg-purple-500/10 border-purple-500/30',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {

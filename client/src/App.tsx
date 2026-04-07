@@ -7,6 +7,7 @@ import AIAnalysisBar from './components/AIAnalysisBar';
 import FilterTabs from './components/FilterTabs';
 import { usePolling } from './hooks/usePolling';
 import { useDashboardStore } from './store/dashboardStore';
+import type { CrisisSignal } from './types';
 
 class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean}> {
   constructor(props: {children: ReactNode}) { super(props); this.state = { hasError: false }; }
@@ -28,20 +29,52 @@ const typeColor: Record<string, string> = {
   environmental: 'text-orange-400',
   market:        'text-blue-400',
   weather:       'text-pink-400',
+  geopolitical:  'text-purple-400',
 };
 
-function computeThreatLevel(signals: any[]) {
+const typeDot: Record<string, string> = {
+  environmental: 'bg-orange-400',
+  market:        'bg-blue-400',
+  weather:       'bg-pink-400',
+  geopolitical:  'bg-purple-400',
+};
+
+function computeThreatLevel(signals: CrisisSignal[]) {
   const critical = signals.filter(s => s.severity === 'critical').length;
   const warning  = signals.filter(s => s.severity === 'warning').length;
-  if (critical >= 6)                          return { label: 'CRITICAL', color: 'text-red-500',    bg: 'bg-red-500/10 border-red-500/30',    dot: 'bg-red-500'    };
-  if (critical >= 3)                          return { label: 'HIGH',     color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30', dot: 'bg-orange-500' };
-  if (critical >= 1 || warning >= 8)          return { label: 'ELEVATED', color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/30', dot: 'bg-yellow-400' };
-  return                                             { label: 'LOW',      color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30',  dot: 'bg-green-500'  };
+  if (critical >= 6)                 return { label: 'CRITICAL', color: 'text-red-500',    bg: 'bg-red-500/10 border-red-500/30',       dot: 'bg-red-500'    };
+  if (critical >= 3)                 return { label: 'HIGH',     color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30', dot: 'bg-orange-500' };
+  if (critical >= 1 || warning >= 8) return { label: 'ELEVATED', color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/30', dot: 'bg-yellow-400' };
+  return                                    { label: 'LOW',      color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30',   dot: 'bg-green-500'  };
 }
+
+// Shared signal card used in both cluster list and signals tab
+const SignalCard: React.FC<{ signal: CrisisSignal; onClick: () => void }> = ({ signal, onClick }) => (
+  <button
+    onClick={onClick}
+    className="w-full text-left bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/[0.08] transition-all group active:scale-[0.98]"
+  >
+    <div className="flex items-center justify-between mb-1">
+      <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${severityColor[signal.severity]}`}>
+        {signal.severity}
+      </span>
+      <div className="flex items-center space-x-1">
+        <div className={`w-1.5 h-1.5 rounded-full ${typeDot[signal.type] || 'bg-gray-400'}`} />
+        <span className={`text-[9px] font-bold uppercase ${typeColor[signal.type] || 'text-gray-400'}`}>{signal.type}</span>
+      </div>
+    </div>
+    <p className="text-[11px] font-black text-gray-100 leading-snug group-hover:text-white tracking-tight">{signal.title}</p>
+    <p className="text-[9px] text-blue-400/60 mt-1 font-mono">{signal.lat.toFixed(2)}°, {signal.lng.toFixed(2)}°</p>
+  </button>
+);
 
 const GICCContent: React.FC = () => {
   usePolling();
-  const { signals, signalsIsLive, selectedSignal, setSelectedSignal, aiAnalysis, aiLoading } = useDashboardStore();
+  const {
+    signals, signalsIsLive,
+    selectedSignal, setSelectedSignal,
+    selectedCluster, setSelectedCluster,
+  } = useDashboardStore();
   const [sidebarTab, setSidebarTab] = useState<'news' | 'signals'>('news');
   const [clock, setClock] = useState(() => new Date());
 
@@ -51,6 +84,11 @@ const GICCContent: React.FC = () => {
   }, []);
 
   const threat = computeThreatLevel(signals);
+
+  // Determine which sidebar view to show
+  const showSignalDetail  = !!selectedSignal;
+  const showClusterDetail = !!selectedCluster && !selectedSignal;
+  const showNormal        = !showSignalDetail && !showClusterDetail;
 
   return (
     <div className="flex flex-col h-screen w-full bg-[#0A0C14] text-[#EEEEF0] overflow-hidden font-sans selection:bg-blue-500/30 relative">
@@ -83,14 +121,11 @@ const GICCContent: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-5">
-          {/* Threat Level */}
           <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border ${threat.bg}`}>
             <div className={`w-1.5 h-1.5 rounded-full ${threat.dot} animate-pulse`} />
             <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Threat</span>
             <span className={`text-[10px] font-black uppercase tracking-widest ${threat.color}`}>{threat.label}</span>
           </div>
-
-          {/* Clock */}
           <div className="flex flex-col items-end">
             <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest leading-none tabular-nums font-mono">
               {clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -100,8 +135,6 @@ const GICCContent: React.FC = () => {
               <span className="text-[9px] font-bold text-blue-400/80 uppercase tracking-widest animate-pulse">Data Sync Active</span>
             </div>
           </div>
-
-          {/* Active Signals count */}
           <div className="flex items-center space-x-2.5 bg-blue-500/10 px-4 py-2 rounded-lg border border-blue-500/20 shadow-inner">
             <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
             <span className="text-[10px] font-black text-white tracking-widest uppercase">{signals.length} SIGNALS</span>
@@ -111,94 +144,104 @@ const GICCContent: React.FC = () => {
 
       {/* Main */}
       <main className="flex-1 flex overflow-hidden relative z-10">
-        {/* Globe */}
         <div className="flex-1 relative bg-[radial-gradient(circle_at_50%_50%,rgba(30,58,138,0.15)_0%,rgba(10,12,20,1)_100%)] overflow-hidden">
           <Globe3D />
         </div>
 
-        {/* Right Sidebar */}
+        {/* Sidebar */}
         <aside className="w-[400px] h-full border-l border-white/10 bg-[#111320]/95 backdrop-blur-2xl flex flex-col overflow-hidden shadow-2xl z-50">
-          {/* Fixed top panels */}
           <div className="shrink-0 p-5 pb-0 space-y-4">
             <FearGreedMeter />
             <AssetTicker />
           </div>
 
-          {/* Signal detail drawer — replaces tab content when a signal is selected */}
-          {selectedSignal ? (
+          {/* ── SIGNAL DETAIL VIEW ── */}
+          {showSignalDetail && (
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-5 pt-3">
-              {/* Back button */}
               <button
                 onClick={() => setSelectedSignal(null)}
                 className="flex items-center space-x-1.5 text-[10px] font-black text-gray-400 hover:text-white uppercase tracking-widest mb-4 shrink-0 transition-colors group"
               >
                 <span className="group-hover:-translate-x-0.5 transition-transform">←</span>
-                <span>Back to Feed</span>
+                <span>Back</span>
               </button>
 
-              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1">
-                {/* Type + Severity badges */}
-                <div className="flex items-center space-x-2 mb-3">
-                  <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${severityColor[selectedSignal.severity]}`}>
-                    {selectedSignal.severity}
+              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 space-y-3">
+                <div className="flex items-center space-x-2">
+                  <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${severityColor[selectedSignal!.severity]}`}>
+                    {selectedSignal!.severity}
                   </span>
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${typeColor[selectedSignal.type] || 'text-gray-400'}`}>
-                    {selectedSignal.type}
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${typeColor[selectedSignal!.type] || 'text-gray-400'}`}>
+                    {selectedSignal!.type}
                   </span>
-                  <span className="text-[9px] font-mono text-gray-600 ml-auto">{selectedSignal.source}</span>
+                  <span className="text-[9px] font-mono text-gray-600 ml-auto">{selectedSignal!.source}</span>
                 </div>
 
-                {/* Title */}
-                <h2 className="text-[15px] font-black text-white leading-tight tracking-tight uppercase italic mb-2">
-                  {selectedSignal.title}
+                <h2 className="text-[14px] font-black text-white leading-tight tracking-tight uppercase italic">
+                  {selectedSignal!.title}
                 </h2>
-                <div className="h-px w-10 bg-blue-500 mb-3" />
+                <div className="h-px w-10 bg-blue-500" />
+                <p className="text-[11px] text-gray-300 leading-relaxed">{selectedSignal!.body}</p>
 
-                {/* Body */}
-                <p className="text-[11px] text-gray-300 leading-relaxed mb-4">{selectedSignal.body}</p>
-
-                {/* Coordinates + timestamp */}
-                <div className="flex items-center justify-between text-[9px] font-mono text-gray-600 mb-5">
-                  <span>{selectedSignal.lat.toFixed(3)}°, {selectedSignal.lng.toFixed(3)}°</span>
-                  <span>{new Date(selectedSignal.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <div className="flex items-center justify-between text-[9px] font-mono text-gray-600">
+                  <span>{selectedSignal!.lat.toFixed(3)}°, {selectedSignal!.lng.toFixed(3)}°</span>
+                  <span>{new Date(selectedSignal!.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
 
-                {/* AI Analysis */}
-                <div className="bg-white/5 border border-white/5 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">AI Analysis</span>
-                    {aiLoading && (
-                      <span className="text-[8px] font-black text-blue-400/60 uppercase tracking-widest animate-pulse">Analyzing...</span>
-                    )}
-                    <button
-                      onClick={() => { if ((window as any).runGICCAI) (window as any).runGICCAI(selectedSignal); }}
-                      className="text-[8px] font-black text-gray-500 hover:text-blue-400 uppercase tracking-widest transition-colors cursor-pointer"
-                    >
-                      Refresh ↻
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-gray-300 leading-relaxed">
-                    {aiLoading
-                      ? 'Synthesizing intelligence...'
-                      : aiAnalysis || 'Click Refresh to analyze this event.'}
-                  </p>
-                </div>
-
-                {/* Related assets */}
-                {selectedSignal.relatedAssets && selectedSignal.relatedAssets.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-4">
-                    {selectedSignal.relatedAssets.map(asset => (
-                      <span key={asset} className="text-[9px] font-black bg-blue-500/10 text-blue-400 px-2 py-1 rounded border border-blue-500/20 uppercase tracking-tighter">
-                        {asset}
-                      </span>
+                {selectedSignal!.relatedAssets && selectedSignal!.relatedAssets.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedSignal!.relatedAssets.map(a => (
+                      <span key={a} className="text-[9px] font-black bg-blue-500/10 text-blue-400 px-2 py-1 rounded border border-blue-500/20 uppercase">{a}</span>
                     ))}
                   </div>
                 )}
+
+                <div className="bg-white/5 border border-white/5 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-gray-500 mb-2">AI analysis appears in the bar below</p>
+                  <button
+                    onClick={() => { if ((window as any).runGICCAI) (window as any).runGICCAI(selectedSignal); }}
+                    className="text-[10px] font-black bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg uppercase tracking-widest transition-colors cursor-pointer shadow-lg shadow-blue-500/20 active:scale-95"
+                  >
+                    Analyze with AI ↓
+                  </button>
+                </div>
               </div>
             </div>
-          ) : (
+          )}
+
+          {/* ── CLUSTER LIST VIEW ── */}
+          {showClusterDetail && (
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-5 pt-3">
+              <button
+                onClick={() => setSelectedCluster(null)}
+                className="flex items-center space-x-1.5 text-[10px] font-black text-gray-400 hover:text-white uppercase tracking-widest mb-3 shrink-0 transition-colors group"
+              >
+                <span className="group-hover:-translate-x-0.5 transition-transform">←</span>
+                <span>Back</span>
+              </button>
+
+              <div className="flex items-center justify-between mb-3 shrink-0">
+                <span className="text-[11px] font-black text-white uppercase tracking-widest">
+                  {selectedCluster!.length} Signals in Cluster
+                </span>
+                <span className="text-[9px] text-gray-500 font-mono">Click to analyze</span>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-2 pr-1">
+                {selectedCluster!.map(signal => (
+                  <SignalCard
+                    key={signal.id}
+                    signal={signal}
+                    onClick={() => setSelectedSignal(signal)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── NORMAL TABS VIEW ── */}
+          {showNormal && (
             <>
-              {/* Tab switcher */}
               <div className="shrink-0 px-5 pt-3 flex space-x-1">
                 <button
                   onClick={() => setSidebarTab('news')}
@@ -214,7 +257,6 @@ const GICCContent: React.FC = () => {
                 </button>
               </div>
 
-              {/* Tab content */}
               <div className="flex-1 min-h-0 p-5 pt-3 flex flex-col">
                 {sidebarTab === 'news' ? (
                   <NewsFeed />
@@ -230,21 +272,7 @@ const GICCContent: React.FC = () => {
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1">
                       {signals.map(signal => (
-                        <button
-                          key={signal.id}
-                          onClick={() => setSelectedSignal(signal)}
-                          className="w-full text-left bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/[0.08] transition-all group active:scale-[0.98]"
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${severityColor[signal.severity]}`}>
-                              {signal.severity}
-                            </span>
-                            <span className="text-[9px] font-bold text-gray-500 uppercase">{signal.type}</span>
-                          </div>
-                          <p className="text-[12px] font-black text-gray-100 leading-snug group-hover:text-white tracking-tight">{signal.title}</p>
-                          <p className="text-[10px] text-gray-400 mt-1 line-clamp-1">{signal.body}</p>
-                          <p className="text-[9px] text-blue-400/60 mt-1 font-mono">{signal.lat.toFixed(2)}°, {signal.lng.toFixed(2)}°</p>
-                        </button>
+                        <SignalCard key={signal.id} signal={signal} onClick={() => setSelectedSignal(signal)} />
                       ))}
                     </div>
                   </div>
@@ -255,7 +283,6 @@ const GICCContent: React.FC = () => {
         </aside>
       </main>
 
-      {/* AI Analysis footer */}
       <footer className="shrink-0 z-[100] border-t border-white/10 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
         <AIAnalysisBar />
       </footer>

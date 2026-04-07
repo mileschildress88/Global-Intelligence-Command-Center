@@ -59,9 +59,10 @@ const beaconFragment = `
 function getMarkerColor(signal: CrisisSignal): number {
   switch (signal.type) {
     case 'environmental': return signal.severity === 'critical' ? 0xFF3B3B : 0xFF9500;
-    case 'weather': return 0xFF6BDF;
-    case 'market': return 0x4DA6FF;
-    default: return 0x50E3C2;
+    case 'weather':       return 0xFF6BDF;
+    case 'market':        return 0x4DA6FF;
+    case 'geopolitical':  return 0xA855F7; // purple
+    default:              return 0x50E3C2;
   }
 }
 
@@ -190,13 +191,13 @@ function buildMarkers(
       })
     );
     orb.position.copy(tv);
-    orb.userData = { signal: cluster.representative, clusterCount: cluster.signals.length };
+    orb.userData = { signal: cluster.representative, clusterSignals: cluster.signals };
     group.add(orb);
 
     // Count label sprite
     const sprite = makeCountSprite(cluster.signals.length, threeColor);
     sprite.position.copy(tv);
-    sprite.userData = { signal: cluster.representative, isCluster: true };
+    sprite.userData = { signal: cluster.representative, clusterSignals: cluster.signals };
     group.add(sprite);
 
     // Beacon rings
@@ -313,7 +314,7 @@ export const useGlobe = (containerRef: React.RefObject<HTMLDivElement>) => {
   const flyTargetRef = useRef<THREE.Vector3 | null>(null);
   const earthRotationPausedRef = useRef(false);
 
-  const { signals, setSelectedSignal, activeFilter } = useDashboardStore();
+  const { signals, setSelectedSignal, setSelectedCluster, activeFilter } = useDashboardStore();
 
   // Marker update effect — only runs when scene already exists
   useEffect(() => {
@@ -424,7 +425,12 @@ export const useGlobe = (containerRef: React.RefObject<HTMLDivElement>) => {
       raycaster.setFromCamera(mouse, camera);
       const hit = raycaster.intersectObjects(markersGroupRef.current.children, true).find(h => h.object.userData?.signal);
       if (hit) {
-        setSelectedSignal(hit.object.userData.signal);
+        const { signal, clusterSignals } = hit.object.userData;
+        if (clusterSignals && clusterSignals.length > 1) {
+          setSelectedCluster(clusterSignals);
+        } else {
+          setSelectedSignal(signal);
+        }
         controls.autoRotate = false;
       }
     };

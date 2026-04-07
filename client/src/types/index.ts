@@ -1,6 +1,6 @@
 export type CrisisSignal = {
   id: string;
-  type: 'environmental' | 'market' | 'weather';
+  type: 'environmental' | 'market' | 'weather' | 'geopolitical';
   severity: 'critical' | 'warning' | 'info';
   lat: number;
   lng: number;
