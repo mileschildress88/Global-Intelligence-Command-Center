@@ -4,11 +4,14 @@ import { useDashboardStore } from '../store/dashboardStore';
 const AIAnalysisBar: React.FC = () => {
   const { aiAnalysis, aiLoading, selectedSignal } = useDashboardStore();
   const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
 
   useEffect(() => {
     setDisplayedText('');
+    setIsTyping(false);
     if (!aiAnalysis) return;
 
+    setIsTyping(true);
     let index = 0;
     const interval = setInterval(() => {
       if (index < aiAnalysis.length) {
@@ -16,26 +19,37 @@ const AIAnalysisBar: React.FC = () => {
         index++;
       } else {
         clearInterval(interval);
+        setIsTyping(false);
       }
-    }, 20);
+    }, 18);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      setIsTyping(false);
+    };
   }, [aiAnalysis]);
+
+  const isActive = aiLoading || isTyping;
 
   return (
     <div className="bg-[#111320] border-t border-white/5 p-4 flex items-start space-x-4 min-h-[5rem] max-h-40">
-      <div className="flex-shrink-0 flex flex-col items-center justify-center pt-1">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white text-[10px] font-black shadow-lg shadow-blue-500/20">
-          AI
+      {/* Bob */}
+      <div className="flex-shrink-0 flex flex-col items-center justify-center pt-0.5">
+        <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 shadow-lg shadow-blue-500/10 bg-[#0d0f1c]">
+          <img
+            src={isActive ? '/textures/robot-idle.gif' : '/textures/robot-idle still.jpg'}
+            alt="Bob"
+            className="w-full h-full object-cover"
+          />
         </div>
-        <span className="text-[9px] text-gray-500 mt-1 uppercase font-bold">Analysis</span>
+        <span className="text-[9px] text-gray-500 mt-1 uppercase font-black tracking-widest">Bob</span>
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <div className="flex items-center space-x-2 mb-1 shrink-0">
-          <div className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
+          <div className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-blue-400 animate-pulse' : 'bg-gray-600'}`} />
           <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest truncate">
-            {selectedSignal ? `Analyzing Signal: ${selectedSignal.title}` : 'Global Market Sentiment Analysis'}
+            {selectedSignal ? `Analyzing: ${selectedSignal.title.slice(0, 40)}…` : 'Global Intelligence Analysis'}
           </span>
         </div>
         <div className="overflow-y-auto custom-scrollbar flex-1">
@@ -53,7 +67,7 @@ const AIAnalysisBar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-shrink-0 flex items-center space-x-3">
+      <div className="flex-shrink-0 flex items-center">
         <button
           onClick={() => { if ((window as any).runGICCAI) (window as any).runGICCAI(selectedSignal ?? undefined); }}
           className="bg-white/5 hover:bg-white/10 text-gray-400 p-2 rounded-lg transition-colors"

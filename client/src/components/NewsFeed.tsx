@@ -23,7 +23,7 @@ const NewsFeed: React.FC = () => {
     : newsItems.filter(n => n.category === activeFilter);
 
   return (
-    <div className="bg-[#111320]/80 backdrop-blur-md border border-white/10 rounded-xl p-5 flex flex-col h-full shadow-2xl overflow-hidden">
+    <div className="bg-[#111320]/80 backdrop-blur-md border border-white/10 rounded-xl p-5 flex flex-col shadow-2xl overflow-hidden">
       <div className="flex justify-between items-center mb-4 shrink-0">
         <div className="flex items-center space-x-2">
           <h3 className="text-gray-400 text-[10px] uppercase tracking-wider font-bold">Intelligence Feed</h3>
@@ -40,7 +40,7 @@ const NewsFeed: React.FC = () => {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar min-h-0 touch-pan-y">
+      <div className="overflow-y-auto pr-1 custom-scrollbar touch-pan-y">
         <div className="space-y-3 pb-4">
           {filtered.length === 0 && (
             <div className="text-center py-10">
