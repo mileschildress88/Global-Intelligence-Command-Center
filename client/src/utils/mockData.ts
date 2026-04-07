@@ -68,6 +68,8 @@ export const mockMarketData: MarketData = {
   spy: { price: 512.34, change24h: 0.15 },
   qqq: { price: 435.67, change24h: -0.85 },
   vix: { price: 14.5, change24h: 3.2 },
+  gold: { price: 3180.0, change24h: 0.52 },
+  oil: { price: 110.34, change24h: -2.31 },
   eurUsd: 1.0854,
   gbpUsd: 1.2645
 };

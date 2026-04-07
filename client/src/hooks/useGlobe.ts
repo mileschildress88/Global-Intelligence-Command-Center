@@ -65,6 +65,87 @@ function getMarkerColor(signal: CrisisSignal): number {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Clustering: group signals within ~7° of each other
+// ---------------------------------------------------------------------------
+interface Cluster {
+  representative: CrisisSignal;
+  signals: CrisisSignal[];
+  lat: number;
+  lng: number;
+}
+
+function clusterSignals(signals: CrisisSignal[], thresholdDeg = 7): { singles: CrisisSignal[]; clusters: Cluster[] } {
+  const used = new Set<string>();
+  const clusters: Cluster[] = [];
+  const singles: CrisisSignal[] = [];
+  const sevScore: Record<string, number> = { critical: 3, warning: 2, info: 1 };
+
+  for (let i = 0; i < signals.length; i++) {
+    if (used.has(signals[i].id)) continue;
+    const group: CrisisSignal[] = [signals[i]];
+    used.add(signals[i].id);
+
+    for (let j = i + 1; j < signals.length; j++) {
+      if (used.has(signals[j].id)) continue;
+      if (
+        Math.abs(signals[i].lat - signals[j].lat) < thresholdDeg &&
+        Math.abs(signals[i].lng - signals[j].lng) < thresholdDeg
+      ) {
+        group.push(signals[j]);
+        used.add(signals[j].id);
+      }
+    }
+
+    if (group.length === 1) {
+      singles.push(group[0]);
+    } else {
+      group.sort((a, b) => sevScore[b.severity] - sevScore[a.severity]);
+      clusters.push({
+        representative: group[0],
+        signals: group,
+        lat: group.reduce((s, g) => s + g.lat, 0) / group.length,
+        lng: group.reduce((s, g) => s + g.lng, 0) / group.length,
+      });
+    }
+  }
+  return { singles, clusters };
+}
+
+function makeCountSprite(count: number, color: THREE.Color): THREE.Sprite {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, size, size);
+
+  // Outer glow ring
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${Math.round(color.r * 255)},${Math.round(color.g * 255)},${Math.round(color.b * 255)},0.25)`;
+  ctx.fill();
+
+  // Inner filled circle
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 14, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${Math.round(color.r * 255)},${Math.round(color.g * 255)},${Math.round(color.b * 255)},0.85)`;
+  ctx.fill();
+
+  // Count text
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${count > 9 ? 36 : 42}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(count), size / 2, size / 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(0.18, 0.18, 0.18);
+  return sprite;
+}
+
 // Plain function — no hooks, safe to call from anywhere
 function buildMarkers(
   group: THREE.Group,
@@ -76,16 +157,69 @@ function buildMarkers(
     const child = group.children[0] as any;
     child.geometry?.dispose();
     if (child.material) {
-      Array.isArray(child.material)
-        ? child.material.forEach((m: any) => m.dispose())
-        : child.material.dispose();
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      mats.forEach((m: any) => { m.map?.dispose(); m.dispose(); });
     }
     group.remove(child);
   }
 
   const filtered = signals.filter(s => activeFilter === 'all' || s.type === activeFilter);
+  const { singles, clusters } = clusterSignals(filtered);
 
-  filtered.forEach(signal => {
+  // Render cluster orbs
+  clusters.forEach(cluster => {
+    const color = getMarkerColor(cluster.representative);
+    const threeColor = new THREE.Color(color);
+    const tip = geoToXYZ(cluster.lat, cluster.lng, 1.14);
+    const tv = new THREE.Vector3(tip.x, tip.y, tip.z);
+
+    // Cluster orb (larger, pulsing)
+    const orb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.038, 16, 16),
+      new THREE.ShaderMaterial({
+        vertexShader: markerVertex,
+        fragmentShader: markerFragment,
+        uniforms: {
+          uTime: { value: 0 },
+          uPulse: { value: 1.0 },
+          uColor: { value: threeColor.clone() },
+        },
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    orb.position.copy(tv);
+    orb.userData = { signal: cluster.representative, clusterCount: cluster.signals.length };
+    group.add(orb);
+
+    // Count label sprite
+    const sprite = makeCountSprite(cluster.signals.length, threeColor);
+    sprite.position.copy(tv);
+    sprite.userData = { signal: cluster.representative, isCluster: true };
+    group.add(sprite);
+
+    // Beacon rings
+    for (let i = 0; i < 3; i++) {
+      const beacon = new THREE.Mesh(
+        new THREE.SphereGeometry(0.038 * 1.2, 16, 16),
+        new THREE.ShaderMaterial({
+          vertexShader: beaconVertex,
+          fragmentShader: beaconFragment,
+          uniforms: { uTime: { value: 0 }, uPhase: { value: i / 3 }, uColor: { value: threeColor.clone() } },
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      beacon.position.copy(tv);
+      beacon.userData = { isBeacon: true };
+      group.add(beacon);
+    }
+  });
+
+  // Render individual signals (unchanged logic below)
+  singles.forEach(signal => {
     const color = getMarkerColor(signal);
     const threeColor = new THREE.Color(color);
     const isCritical = signal.severity === 'critical';

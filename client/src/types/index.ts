@@ -23,6 +23,8 @@ export type MarketData = {
   spy: AssetData;
   qqq: AssetData;
   vix: AssetData;
+  gold: AssetData;
+  oil: AssetData;
   eurUsd: number;
   gbpUsd: number;
 };

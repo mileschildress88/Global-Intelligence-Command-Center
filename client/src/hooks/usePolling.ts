@@ -7,7 +7,7 @@ import type { CrisisSignal, NewsItem } from '../types';
 const API_BASE = 'http://localhost:3001/api';
 
 // ---------------------------------------------------------------------------
-// Location extraction — maps keyword patterns to globe coordinates
+// Location extraction
 // ---------------------------------------------------------------------------
 const LOCATION_KEYWORDS: { keywords: string[]; lat: number; lng: number; label: string }[] = [
   { keywords: ['iran', 'tehran', 'iranian'], lat: 35.7, lng: 51.4, label: 'Tehran' },
@@ -22,11 +22,12 @@ const LOCATION_KEYWORDS: { keywords: string[]; lat: number; lng: number; label: 
   { keywords: ['india', 'delhi', 'mumbai', 'modi', 'rupee'], lat: 28.6, lng: 77.2, label: 'New Delhi' },
   { keywords: ['pakistan', 'islamabad', 'karachi'], lat: 33.7, lng: 73.1, label: 'Islamabad' },
   { keywords: ['saudi', 'riyadh', 'aramco', 'opec'], lat: 24.7, lng: 46.7, label: 'Riyadh' },
-  { keywords: ['middle east', 'iraq', 'baghdad', 'baghdad'], lat: 33.3, lng: 44.4, label: 'Baghdad' },
+  { keywords: ['iraq', 'baghdad'], lat: 33.3, lng: 44.4, label: 'Baghdad' },
+  { keywords: ['middle east'], lat: 29.0, lng: 42.0, label: 'Middle East' },
   { keywords: ['turkey', 'ankara', 'istanbul', 'erdogan'], lat: 39.9, lng: 32.9, label: 'Ankara' },
   { keywords: ['egypt', 'cairo'], lat: 30.0, lng: 31.2, label: 'Cairo' },
   { keywords: ['africa', 'nigeria', 'lagos'], lat: 6.5, lng: 3.4, label: 'Lagos' },
-  { keywords: ['south africa', 'johannesburg', 'cape town'], lat: -26.2, lng: 28.0, label: 'Johannesburg' },
+  { keywords: ['south africa', 'johannesburg'], lat: -26.2, lng: 28.0, label: 'Johannesburg' },
   { keywords: ['ethiopia', 'kenya', 'east africa'], lat: 9.0, lng: 38.7, label: 'Addis Ababa' },
   { keywords: ['europe', 'european union', ' eu ', 'ecb', 'eurozone', 'brussels'], lat: 50.8, lng: 4.4, label: 'Brussels' },
   { keywords: ['germany', 'berlin', 'german', 'bundesbank'], lat: 52.5, lng: 13.4, label: 'Berlin' },
@@ -34,16 +35,17 @@ const LOCATION_KEYWORDS: { keywords: string[]; lat: number; lng: number; label: 
   { keywords: ['uk', 'britain', 'british', 'london', 'bank of england', 'pound'], lat: 51.5, lng: -0.1, label: 'London' },
   { keywords: ['new york', 'nyc', 'wall street', 'nasdaq', 'dow jones', 's&p 500', 'goldman', 'jpmorgan'], lat: 40.7, lng: -74.0, label: 'New York' },
   { keywords: ['washington', 'white house', 'pentagon', 'congress', 'senate', 'trump', 'biden'], lat: 38.9, lng: -77.0, label: 'Washington D.C.' },
-  { keywords: ['california', 'los angeles', 'san francisco', 'silicon valley', 'tech stock'], lat: 37.8, lng: -122.4, label: 'California' },
-  { keywords: ['canada', 'ottawa', 'toronto', 'canadian'], lat: 45.4, lng: -75.7, label: 'Ottawa' },
+  { keywords: ['california', 'los angeles', 'san francisco', 'silicon valley'], lat: 37.8, lng: -122.4, label: 'California' },
+  { keywords: ['canada', 'ottawa', 'toronto'], lat: 45.4, lng: -75.7, label: 'Ottawa' },
   { keywords: ['mexico', 'mexico city'], lat: 19.4, lng: -99.1, label: 'Mexico City' },
-  { keywords: ['brazil', 'são paulo', 'sao paulo', 'brasilia', 'real currency'], lat: -23.5, lng: -46.6, label: 'São Paulo' },
-  { keywords: ['argentina', 'buenos aires', 'peso'], lat: -34.6, lng: -58.4, label: 'Buenos Aires' },
-  { keywords: ['venezuela', 'colombia'], lat: 4.7, lng: -74.1, label: 'Bogotá' },
+  { keywords: ['brazil', 'são paulo', 'sao paulo', 'brasilia'], lat: -23.5, lng: -46.6, label: 'São Paulo' },
+  { keywords: ['argentina', 'buenos aires'], lat: -34.6, lng: -58.4, label: 'Buenos Aires' },
+  { keywords: ['colombia', 'bogota'], lat: 4.7, lng: -74.1, label: 'Bogotá' },
   { keywords: ['australia', 'sydney', 'canberra', 'rba'], lat: -33.8, lng: 151.2, label: 'Sydney' },
   { keywords: ['indonesia', 'jakarta'], lat: -6.2, lng: 106.8, label: 'Jakarta' },
   { keywords: ['crypto', 'bitcoin', 'ethereum', 'btc', 'eth', 'blockchain', 'defi', 'coinbase', 'binance'], lat: 37.8, lng: -122.4, label: 'San Francisco' },
   { keywords: ['oil', 'crude', 'energy market', 'brent', 'wti', 'petroleum'], lat: 25.3, lng: 51.5, label: 'Doha' },
+  { keywords: ['gold', 'precious metal'], lat: 40.7, lng: -74.0, label: 'New York' },
   { keywords: ['federal reserve', 'powell', 'interest rate', 'inflation', 'cpi', 'fomc'], lat: 38.9, lng: -77.0, label: 'Washington D.C.' },
   { keywords: ['hurricane', 'typhoon', 'cyclone'], lat: 25.0, lng: -80.0, label: 'Caribbean' },
   { keywords: ['earthquake', 'tsunami', 'seismic'], lat: 35.7, lng: 139.7, label: 'Tokyo' },
@@ -64,46 +66,34 @@ function extractLocation(text: string): { lat: number; lng: number; label: strin
 
 function classifyArticle(text: string, feedCategory?: string): { type: CrisisSignal['type']; severity: CrisisSignal['severity'] } {
   const lower = text.toLowerCase();
-
-  // Severity
-  const criticalWords = ['war', 'attack', 'killed', 'dead', 'collapse', 'crash', 'crisis', 'emergency', 'explosion', 'strike', 'invasion', 'missile', 'nuclear', 'catastrophe', 'surge', 'plunge', 'plummets'];
+  const criticalWords = ['war', 'attack', 'killed', 'dead', 'collapse', 'crash', 'crisis', 'emergency', 'explosion', 'strike', 'invasion', 'missile', 'nuclear', 'catastrophe', 'plunge', 'plummets'];
   const warningWords = ['tension', 'threat', 'risk', 'sanction', 'protest', 'unrest', 'decline', 'concern', 'warning', 'volatile', 'drops', 'falls', 'slump', 'dispute'];
   const severity: CrisisSignal['severity'] = criticalWords.some(w => lower.includes(w)) ? 'critical'
-    : warningWords.some(w => lower.includes(w)) ? 'warning'
-    : 'info';
+    : warningWords.some(w => lower.includes(w)) ? 'warning' : 'info';
 
-  // Type: use feed category first, fall back to keyword matching
   let type: CrisisSignal['type'];
-  if (feedCategory === 'environmental') {
-    type = 'environmental';
-  } else if (feedCategory === 'market') {
-    type = 'market';
-  } else if (feedCategory === 'weather') {
-    type = 'weather';
-  } else {
-    // Keyword fallback for 'global' category feeds
-    const marketWords = ['stock', 'market', 'economy', 'gdp', 'fed', 'rate', 'crypto', 'bitcoin', 'bank', 'inflation', 'trade', 'tariff', 'nasdaq', 'dow', 's&p', 'bond', 'yield', 'dollar', 'yen', 'euro', 'pound', 'recession'];
+  if (feedCategory === 'environmental') type = 'environmental';
+  else if (feedCategory === 'market') type = 'market';
+  else if (feedCategory === 'weather') type = 'weather';
+  else {
+    const marketWords = ['stock', 'market', 'economy', 'gdp', 'fed', 'rate', 'crypto', 'bitcoin', 'bank', 'inflation', 'trade', 'tariff', 'nasdaq', 'dow', 's&p', 'bond', 'yield', 'dollar', 'recession'];
     const envWords = ['climate', 'flood', 'wildfire', 'earthquake', 'tsunami', 'drought', 'pollution', 'emissions', 'carbon', 'glacier', 'sea level', 'famine', 'deforestation'];
-    const weatherWords = ['hurricane', 'typhoon', 'cyclone', 'tornado', 'storm', 'heatwave', 'blizzard', 'snowstorm', 'thunder'];
+    const weatherWords = ['hurricane', 'typhoon', 'cyclone', 'tornado', 'storm', 'heatwave', 'blizzard', 'snowstorm'];
     type = weatherWords.some(w => lower.includes(w)) ? 'weather'
       : envWords.some(w => lower.includes(w)) ? 'environmental'
       : marketWords.some(w => lower.includes(w)) ? 'market'
       : 'environmental';
   }
-
   return { type, severity };
 }
 
 function newsToSignals(items: NewsItem[]): CrisisSignal[] {
   const signals: CrisisSignal[] = [];
   const usedCoords = new Set<string>();
-
   for (const item of items) {
     const text = `${item.title} ${item.description || ''}`;
     const loc = extractLocation(text);
     if (!loc) continue;
-
-    // Slightly jitter if two articles map to identical coords, so pins don't stack
     let { lat, lng } = loc;
     const coordKey = `${lat.toFixed(1)},${lng.toFixed(1)}`;
     if (usedCoords.has(coordKey)) {
@@ -111,22 +101,16 @@ function newsToSignals(items: NewsItem[]): CrisisSignal[] {
       lng += (Math.random() - 0.5) * 4;
     }
     usedCoords.add(coordKey);
-
     const { type, severity } = classifyArticle(text, item.category);
-
     signals.push({
       id: `news-signal-${item.id}`,
-      type,
-      severity,
-      lat,
-      lng,
+      type, severity, lat, lng,
       title: item.title.length > 80 ? item.title.slice(0, 77) + '…' : item.title,
       body: item.description || item.title,
       source: item.source,
       timestamp: new Date(item.publishedAt),
     });
   }
-
   return signals;
 }
 
@@ -135,20 +119,80 @@ function newsToSignals(items: NewsItem[]): CrisisSignal[] {
 // ---------------------------------------------------------------------------
 export const usePolling = () => {
   const {
-    setMarketData,
-    appendPriceHistory,
-    setNewsItems,
-    setSignals,
-    updateFearGreed,
-    setAIAnalysis,
-    setAILoading,
-    selectedSignal
+    setMarketData, appendPriceHistory, setNewsItems, setSignals,
+    updateFearGreed, setAIAnalysis, setAILoading, selectedSignal,
   } = useDashboardStore();
 
   const isInitialized = useRef(false);
   const lastAICallRef = useRef(0);
   const aiInFlightRef = useRef(false);
   const AI_COOLDOWN_MS = 5000;
+
+  // Refs to hold latest data so both can merge into one marketData update
+  const latestCryptoRef = useRef<any>(null);
+  const latestStocksRef = useRef<any>(null);
+  const latestCommoditiesRef = useRef<any>(null);
+
+  // Refs to hold latest signals from each source so they can be merged
+  const newsSignalsRef = useRef<CrisisSignal[]>([]);
+  const earthquakeSignalsRef = useRef<CrisisSignal[]>([]);
+
+  const mergeAndSetSignals = () => {
+    const combined = [...newsSignalsRef.current, ...earthquakeSignalsRef.current];
+    if (combined.length > 0) setSignals(combined, true);
+  };
+
+  // --- Market data merge ---
+  const applyMarketData = (crypto: any, stocks: any, commodities: any) => {
+    const mock = mockMarketData;
+    const newData = {
+      btc: crypto?.bitcoin ? { price: crypto.bitcoin.usd, change24h: crypto.bitcoin.usd_24h_change } : mock.btc,
+      eth: crypto?.ethereum ? { price: crypto.ethereum.usd, change24h: crypto.ethereum.usd_24h_change } : mock.eth,
+      sol: crypto?.solana ? { price: crypto.solana.usd, change24h: crypto.solana.usd_24h_change } : mock.sol,
+      spy: stocks?.SPY?.['05. price'] ? { price: parseFloat(stocks.SPY['05. price']), change24h: parseFloat(stocks.SPY['10. change percent']) } : mock.spy,
+      qqq: stocks?.QQQ?.['05. price'] ? { price: parseFloat(stocks.QQQ['05. price']), change24h: parseFloat(stocks.QQQ['10. change percent']) } : mock.qqq,
+      vix: stocks?.['^VIX']?.['05. price'] ? { price: parseFloat(stocks['^VIX']['05. price']), change24h: parseFloat(stocks['^VIX']['10. change percent']) } : mock.vix,
+      gold: commodities?.gold ?? mock.gold,
+      oil: commodities?.oil ?? mock.oil,
+      eurUsd: 1.08,
+      gbpUsd: 1.26,
+    };
+    setMarketData(newData, crypto !== null || commodities?.gold !== null);
+    ['BTC', 'ETH', 'SOL', 'SPY', 'QQQ', 'VIX'].forEach(asset => {
+      appendPriceHistory(asset, (newData as any)[asset.toLowerCase()].price);
+    });
+  };
+
+  // CoinGecko — every 2 min
+  const fetchCrypto = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/market/crypto`);
+      latestCryptoRef.current = res.data;
+    } catch (e) { console.warn('Crypto API failed'); }
+    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current);
+  };
+
+  // Alpha Vantage — every 4 hours (25 req/day limit)
+  const fetchStocks = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/market/stocks`);
+      latestStocksRef.current = res.data;
+    } catch (e) { console.warn('Stocks API failed'); }
+    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current);
+  };
+
+  // Commodities (gold via CoinGecko PAXG + WTI via Yahoo Finance) — every 5 min
+  const fetchCommodities = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/market/commodities`);
+      latestCommoditiesRef.current = res.data;
+    } catch (e) { console.warn('Commodities API failed'); }
+    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current);
+  };
+
+  const fetchMarket = async () => {
+    await Promise.all([fetchCrypto(), fetchStocks(), fetchCommodities()]);
+  };
 
   // --- CNN Fear & Greed ---
   const fetchFearGreed = async () => {
@@ -157,61 +201,10 @@ export const usePolling = () => {
       const { score, rating } = res.data;
       const label = rating.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       updateFearGreed(score, label);
-    } catch (e) {
-      console.warn('Fear & Greed fetch failed');
-    }
+    } catch (e) { console.warn('Fear & Greed fetch failed'); }
   };
 
-  // Shared ref so crypto and stocks can merge into one marketData update
-  const latestCryptoRef = useRef<any>(null);
-  const latestStocksRef = useRef<any>(null);
-
-  const applyMarketData = (cryptoData: any, stocksData: any) => {
-    const mock = mockMarketData;
-    const newData = {
-      btc: cryptoData?.bitcoin ? { price: cryptoData.bitcoin.usd, change24h: cryptoData.bitcoin.usd_24h_change } : mock.btc,
-      eth: cryptoData?.ethereum ? { price: cryptoData.ethereum.usd, change24h: cryptoData.ethereum.usd_24h_change } : mock.eth,
-      sol: cryptoData?.solana ? { price: cryptoData.solana.usd, change24h: cryptoData.solana.usd_24h_change } : mock.sol,
-      spy: stocksData?.SPY?.['05. price'] ? { price: parseFloat(stocksData.SPY['05. price']), change24h: parseFloat(stocksData.SPY['10. change percent']) } : mock.spy,
-      qqq: stocksData?.QQQ?.['05. price'] ? { price: parseFloat(stocksData.QQQ['05. price']), change24h: parseFloat(stocksData.QQQ['10. change percent']) } : mock.qqq,
-      vix: stocksData?.['^VIX']?.['05. price'] ? { price: parseFloat(stocksData['^VIX']['05. price']), change24h: parseFloat(stocksData['^VIX']['10. change percent']) } : mock.vix,
-      eurUsd: 1.08,
-      gbpUsd: 1.26,
-    };
-    setMarketData(newData, cryptoData !== null);
-    ['BTC', 'ETH', 'SOL', 'SPY', 'QQQ', 'VIX'].forEach(asset => {
-      appendPriceHistory(asset, (newData as any)[asset.toLowerCase()].price);
-    });
-  };
-
-  // CoinGecko — free tier, poll every 2 min
-  const fetchCrypto = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/market/crypto`);
-      latestCryptoRef.current = res.data;
-    } catch (e) {
-      console.warn('Crypto API failed, using mock');
-    }
-    applyMarketData(latestCryptoRef.current, latestStocksRef.current);
-  };
-
-  // Alpha Vantage — 25 req/day (3 symbols = max 8 fetches/day), poll every 4 hours
-  const fetchStocks = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/market/stocks`);
-      latestStocksRef.current = res.data;
-    } catch (e) {
-      console.warn('Stocks API failed, using mock');
-    }
-    applyMarketData(latestCryptoRef.current, latestStocksRef.current);
-  };
-
-  // Initial load: fetch both simultaneously
-  const fetchMarket = async () => {
-    await Promise.all([fetchCrypto(), fetchStocks()]);
-  };
-
-  // --- News + signals from news ---
+  // --- News + signals ---
   const fetchNews = async () => {
     try {
       const res = await axios.get(`${API_BASE}/news`);
@@ -224,15 +217,40 @@ export const usePolling = () => {
         url: a.url,
         category: a.category,
       }));
-
       if (items.length > 0) {
         setNewsItems(items, true);
-        const signals = newsToSignals(items);
-        if (signals.length > 0) setSignals(signals, true);
+        newsSignalsRef.current = newsToSignals(items);
+        mergeAndSetSignals();
       }
-    } catch (e) {
-      console.warn('News API failed');
-    }
+    } catch (e) { console.warn('News API failed'); }
+  };
+
+  // --- USGS Earthquakes ---
+  const fetchEarthquakes = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/earthquakes`);
+      const features: any[] = res.data?.features ?? [];
+      const signals: CrisisSignal[] = features
+        .filter(f => f.properties?.mag >= 2.5 && f.geometry?.coordinates)
+        .map(f => {
+          const mag: number = f.properties.mag;
+          const [lng, lat] = f.geometry.coordinates;
+          const place: string = f.properties.place || 'Unknown location';
+          const severity: CrisisSignal['severity'] = mag >= 7.0 ? 'critical' : mag >= 5.0 ? 'warning' : 'info';
+          return {
+            id: `quake-${f.id}`,
+            type: 'environmental' as const,
+            severity,
+            lat, lng,
+            title: `M${mag.toFixed(1)} Earthquake — ${place}`,
+            body: `Magnitude ${mag.toFixed(1)} seismic event detected ${place}. ${mag >= 6.0 ? 'Potential for significant damage and aftershocks.' : mag >= 5.0 ? 'Felt widely, minor damage possible.' : 'Minor event, unlikely to cause damage.'}`,
+            source: 'USGS',
+            timestamp: new Date(f.properties.time),
+          };
+        });
+      earthquakeSignalsRef.current = signals;
+      mergeAndSetSignals();
+    } catch (e) { console.warn('Earthquake fetch failed:', e); }
   };
 
   // --- AI Analysis ---
@@ -242,11 +260,11 @@ export const usePolling = () => {
     aiInFlightRef.current = true;
     lastAICallRef.current = now;
     setAILoading(true);
-
     try {
       const state = useDashboardStore.getState();
-      const btcPrice = state.marketData?.btc?.price || 'Loading...';
+      const btcPrice = state.marketData?.btc?.price || 'N/A';
       const btcChange = state.marketData?.btc?.change24h || 'N/A';
+      const goldPrice = state.marketData?.gold?.price || 'N/A';
       const sentiment = state.fearGreedLabel || 'Analyzing...';
       const topNews = state.newsItems.slice(0, 3).map(n => n.title).join('; ') || 'Awaiting headlines...';
 
@@ -257,24 +275,22 @@ export const usePolling = () => {
 EVENT: ${signal.title}
 DETAILS: ${signal.body}
 LOCATION: (${signal.lat}, ${signal.lng})
-MARKET CONTEXT: Bitcoin $${btcPrice}, Sentiment: ${sentiment}
+MARKET CONTEXT: BTC $${btcPrice}, Gold $${goldPrice}/oz, Sentiment: ${sentiment}
 
-Write 3-4 sentences of authoritative analysis. Explain how this event impacts regional economic stability and asset valuations. Be decisive and direct.`;
+Write 3-4 sentences of authoritative analysis. Explain how this event impacts regional stability and asset valuations. Be decisive and direct.`;
       } else {
         prompt = `You are a global market intelligence analyst. Respond in plain text only — no markdown, no asterisks, no bullet points, no headers.
 
-BTC: $${btcPrice} (${btcChange}% 24h)
+BTC: $${btcPrice} (${btcChange}% 24h) | Gold: $${goldPrice}/oz | Sentiment: ${sentiment}
 HEADLINES: ${topNews}
 
-Write 4 authoritative sentences synthesizing current market conditions. Identify a non-obvious connection between these headlines and asset volatility. End with a specific actionable recommendation.`;
+Write 4 authoritative sentences synthesizing current global conditions. Identify a non-obvious connection between these headlines and asset volatility. End with a specific actionable recommendation.`;
       }
 
       const res = await axios.post(`${API_BASE}/ai/analyze`, { prompt });
       if (res.data?.choices?.[0]?.message?.content) {
         setAIAnalysis(res.data.choices[0].message.content);
-      } else {
-        throw new Error('Incomplete response');
-      }
+      } else throw new Error('Incomplete response');
     } catch (e) {
       console.error('GICC AI Error:', e);
       setAIAnalysis("Strategic intelligence indicates heightened sensitivity in commodities and energy markets due to environmental-geopolitical coupling. Maintain exposure to non-correlated defensive assets until the next sync cycle completes.");
@@ -292,9 +308,7 @@ Write 4 authoritative sentences synthesizing current market conditions. Identify
   useEffect(() => {
     if (selectedSignal) {
       runAIAnalysis(selectedSignal);
-      if ((window as any).giccFlyTo) {
-        (window as any).giccFlyTo(selectedSignal.lat, selectedSignal.lng);
-      }
+      if ((window as any).giccFlyTo) (window as any).giccFlyTo(selectedSignal.lat, selectedSignal.lng);
     }
   }, [selectedSignal, runAIAnalysis]);
 
@@ -303,31 +317,26 @@ Write 4 authoritative sentences synthesizing current market conditions. Identify
     isInitialized.current = true;
 
     const init = async () => {
-      await Promise.all([fetchFearGreed(), fetchMarket(), fetchNews()]);
+      await Promise.all([fetchFearGreed(), fetchMarket(), fetchNews(), fetchEarthquakes()]);
       runAIAnalysis();
     };
     init();
 
-    // CoinGecko: free tier ~30 req/min — poll every 2 minutes
-    const cryptoInterval = setInterval(fetchCrypto, 2 * 60 * 1000);
-
-    // Alpha Vantage: 25 req/DAY (3 symbols per call = max 8 fetches/day) — poll every 4 hours
-    const stocksInterval = setInterval(fetchStocks, 4 * 60 * 60 * 1000);
-
-    // CNN Fear & Greed: unofficial endpoint, data changes slowly — poll every 10 minutes
-    const fearGreedInterval = setInterval(fetchFearGreed, 10 * 60 * 1000);
-
-    // RSS news: no hard limits, content refreshes every ~15 min — poll every 5 minutes
-    const newsInterval = setInterval(fetchNews, 5 * 60 * 1000);
-
-    // Groq AI: 14,400 req/day — auto-briefing every 5 minutes, plus 5s cooldown guard
-    const aiInterval = setInterval(() => runAIAnalysis(), 5 * 60 * 1000);
+    const cryptoInterval    = setInterval(fetchCrypto,       2 * 60 * 1000);
+    const stocksInterval    = setInterval(fetchStocks,       4 * 60 * 60 * 1000);
+    const commoditiesInterval = setInterval(fetchCommodities, 5 * 60 * 1000);
+    const fearGreedInterval = setInterval(fetchFearGreed,    10 * 60 * 1000);
+    const newsInterval      = setInterval(fetchNews,         5 * 60 * 1000);
+    const quakeInterval     = setInterval(fetchEarthquakes,  10 * 60 * 1000); // USGS updates ~every 5 min
+    const aiInterval        = setInterval(() => runAIAnalysis(), 5 * 60 * 1000);
 
     return () => {
       clearInterval(cryptoInterval);
       clearInterval(stocksInterval);
+      clearInterval(commoditiesInterval);
       clearInterval(fearGreedInterval);
       clearInterval(newsInterval);
+      clearInterval(quakeInterval);
       clearInterval(aiInterval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

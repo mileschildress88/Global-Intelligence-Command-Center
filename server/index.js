@@ -223,6 +223,67 @@ app.get('/api/news', async (req, res) => {
   }
 });
 
+// USGS Earthquake Feed (free, real-time, no key)
+app.get('/api/earthquakes', async (req, res) => {
+  const cacheKey = 'earthquake_data';
+  const cached = cache.get(cacheKey);
+  if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
+  try {
+    const response = await axios.get(
+      'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson',
+      { timeout: 8000 }
+    );
+    cache.set(cacheKey, response.data, 10 * 60); // 10 min cache
+    res.json(response.data);
+  } catch (error) {
+    console.error('USGS error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch earthquake data' });
+  }
+});
+
+// Commodities: Gold (CoinGecko pax-gold) + WTI Oil (Yahoo Finance)
+app.get('/api/market/commodities', async (req, res) => {
+  const cacheKey = 'commodities_data';
+  const cached = cache.get(cacheKey);
+  if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
+  let gold = null, oil = null;
+
+  // Gold via pax-gold on CoinGecko (1 PAXG = 1 troy oz gold, free, no key)
+  try {
+    const r = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+      params: { ids: 'pax-gold', vs_currencies: 'usd', include_24hr_change: 'true' },
+      timeout: 8000,
+    });
+    const g = r.data['pax-gold'];
+    if (g) gold = { price: g.usd, change24h: g.usd_24h_change };
+  } catch (e) {
+    console.warn('Gold (PAXG) fetch failed:', e.message);
+  }
+
+  // WTI Crude Oil via Yahoo Finance (CL=F futures, no key required)
+  try {
+    const r = await axios.get('https://query1.finance.yahoo.com/v8/finance/chart/CL=F', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      timeout: 8000,
+    });
+    const meta = r.data?.chart?.result?.[0]?.meta;
+    if (meta?.regularMarketPrice) {
+      const price = meta.regularMarketPrice;
+      const prev = meta.previousClose || meta.chartPreviousClose || price;
+      const change24h = ((price - prev) / prev) * 100;
+      oil = { price, change24h };
+    }
+  } catch (e) {
+    console.warn('Oil (WTI) fetch failed:', e.message);
+  }
+
+  const payload = { gold, oil };
+  cache.set(cacheKey, payload, 5 * 60); // 5 min cache
+  res.json(payload);
+});
+
 // CNN Fear & Greed Index
 app.get('/api/feargreed', async (req, res) => {
   const cacheKey = 'feargreed_data';
