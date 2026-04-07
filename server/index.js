@@ -146,38 +146,76 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 
-// News Proxy (RSS — no API key required)
+// News Proxy (RSS — no API key required, categorized by type + region)
 app.get('/api/news', async (req, res) => {
   const cacheKey = 'news_data';
   const cachedData = cache.get(cacheKey);
   if (cachedData) return res.set('X-Cache', 'HIT').json(cachedData);
 
   const feeds = [
-    'https://feeds.bbci.co.uk/news/world/rss.xml',
-    'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
-    'https://feeds.reuters.com/reuters/topNews',
-    'https://www.aljazeera.com/xml/rss/all.xml',
+    // === GLOBAL / GEOPOLITICAL — one feed per continent ===
+    { url: 'https://feeds.bbci.co.uk/news/world/rss.xml',                          category: 'global', source: 'BBC News' },
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',               category: 'global', source: 'NY Times' },
+    { url: 'https://www.aljazeera.com/xml/rss/all.xml',                            category: 'global', source: 'Al Jazeera' },        // Middle East
+    { url: 'https://rss.dw.com/xml/rss-en-all',                                    category: 'global', source: 'Deutsche Welle' },    // Europe
+    { url: 'https://www3.nhk.or.jp/rss/news/cat0.xml',                             category: 'global', source: 'NHK World' },         // Japan / Asia
+    { url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',           category: 'global', source: 'Times of India' },    // South Asia
+    { url: 'https://www.abc.net.au/news/feed/51120/rss.xml',                       category: 'global', source: 'ABC Australia' },     // Oceania
+    { url: 'https://en.mercopress.com/rss',                                        category: 'global', source: 'MercoPress' },        // Latin America
+    { url: 'https://feeds.bbci.co.uk/news/world/africa/rss.xml',                   category: 'global', source: 'BBC Africa' },        // Africa
+    { url: 'https://feeds.reuters.com/reuters/topNews',                            category: 'global', source: 'Reuters' },
+
+    // === ENVIRONMENTAL / CLIMATE ===
+    { url: 'https://www.theguardian.com/environment/rss',                          category: 'environmental', source: 'The Guardian' },
+    { url: 'https://earthobservatory.nasa.gov/feeds/earth-observatory.rss',        category: 'environmental', source: 'NASA Earth' },
+    { url: 'https://insideclimatenews.org/feed/',                                  category: 'environmental', source: 'Inside Climate News' },
+    { url: 'https://www.carbonbrief.org/feed',                                     category: 'environmental', source: 'Carbon Brief' },
+    { url: 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml',        category: 'environmental', source: 'BBC Science' },
+
+    // === MARKET / FINANCIAL ===
+    { url: 'https://feeds.reuters.com/reuters/businessNews',                       category: 'market', source: 'Reuters Business' },
+    { url: 'https://feeds.marketwatch.com/marketwatch/topstories/',                category: 'market', source: 'MarketWatch' },
+    { url: 'https://finance.yahoo.com/news/rssindex',                              category: 'market', source: 'Yahoo Finance' },
+    { url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html',               category: 'market', source: 'CNBC Markets' },
+    { url: 'https://feeds.reuters.com/reuters/companyNews',                        category: 'market', source: 'Reuters Business' },
+
+    // === WEATHER ===
+    { url: 'https://www.nhc.noaa.gov/index-at.xml',                               category: 'weather', source: 'NHC Atlantic' },
+    { url: 'https://www.nhc.noaa.gov/index-ep.xml',                               category: 'weather', source: 'NHC Pacific' },
+    { url: 'https://www.theguardian.com/world/natural-disasters/rss',             category: 'weather', source: 'Guardian Disasters' },
+    { url: 'https://feeds.bbci.co.uk/news/world/rss.xml',                         category: 'weather', source: 'BBC Weather' },      // filtered by keywords client-side
   ];
 
   try {
-    const results = await Promise.allSettled(feeds.map(url => rssParser.parseURL(url)));
+    const results = await Promise.allSettled(
+      feeds.map(f => rssParser.parseURL(f.url).then(feed => ({ feed, meta: f })))
+    );
+
+    const seen = new Set();
     const articles = [];
+
     for (const result of results) {
       if (result.status !== 'fulfilled') continue;
-      for (const item of (result.value.items || []).slice(0, 5)) {
+      const { feed, meta } = result.value;
+      for (const item of (feed.items || []).slice(0, 6)) {
+        if (!item.title) continue;
+        const key = item.title.slice(0, 60).toLowerCase();
+        if (seen.has(key)) continue; // deduplicate
+        seen.add(key);
         articles.push({
-          title: item.title || '',
+          title: item.title,
           description: item.contentSnippet || item.summary || '',
-          source: { name: result.value.title || 'RSS' },
+          source: { name: meta.source },
           publishedAt: item.pubDate || item.isoDate || new Date().toISOString(),
           url: item.link || '',
+          category: meta.category,
         });
       }
     }
-    // Sort by date, newest first, cap at 20
+
     articles.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-    const payload = { articles: articles.slice(0, 20) };
-    cache.set(cacheKey, payload, 300);
+    const payload = { articles: articles.slice(0, 80) };
+    cache.set(cacheKey, payload, 5 * 60);
     res.json(payload);
   } catch (error) {
     console.error('News RSS error:', error.message);

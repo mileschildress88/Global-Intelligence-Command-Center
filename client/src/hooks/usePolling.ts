@@ -62,7 +62,7 @@ function extractLocation(text: string): { lat: number; lng: number; label: strin
   return null;
 }
 
-function classifyArticle(text: string): { type: CrisisSignal['type']; severity: CrisisSignal['severity'] } {
+function classifyArticle(text: string, feedCategory?: string): { type: CrisisSignal['type']; severity: CrisisSignal['severity'] } {
   const lower = text.toLowerCase();
 
   // Severity
@@ -72,15 +72,24 @@ function classifyArticle(text: string): { type: CrisisSignal['type']; severity: 
     : warningWords.some(w => lower.includes(w)) ? 'warning'
     : 'info';
 
-  // Type
-  const marketWords = ['stock', 'market', 'economy', 'gdp', 'fed', 'rate', 'crypto', 'bitcoin', 'bank', 'inflation', 'trade', 'tariff', 'nasdaq', 'dow', 's&p', 'bond', 'yield', 'dollar', 'yen', 'euro', 'pound', 'peso', 'recession'];
-  const envWords = ['climate', 'flood', 'wildfire', 'earthquake', 'tsunami', 'drought', 'pollution', 'emissions', 'carbon', 'ice', 'glacier', 'sea level', 'famine'];
-  const weatherWords = ['hurricane', 'typhoon', 'cyclone', 'tornado', 'storm', 'heatwave', 'blizzard', 'snowstorm', 'thunder'];
-
-  const type: CrisisSignal['type'] = envWords.some(w => lower.includes(w)) ? 'environmental'
-    : weatherWords.some(w => lower.includes(w)) ? 'weather'
-    : marketWords.some(w => lower.includes(w)) ? 'market'
-    : 'environmental'; // default — geopolitical/conflict events are global environmental threats
+  // Type: use feed category first, fall back to keyword matching
+  let type: CrisisSignal['type'];
+  if (feedCategory === 'environmental') {
+    type = 'environmental';
+  } else if (feedCategory === 'market') {
+    type = 'market';
+  } else if (feedCategory === 'weather') {
+    type = 'weather';
+  } else {
+    // Keyword fallback for 'global' category feeds
+    const marketWords = ['stock', 'market', 'economy', 'gdp', 'fed', 'rate', 'crypto', 'bitcoin', 'bank', 'inflation', 'trade', 'tariff', 'nasdaq', 'dow', 's&p', 'bond', 'yield', 'dollar', 'yen', 'euro', 'pound', 'recession'];
+    const envWords = ['climate', 'flood', 'wildfire', 'earthquake', 'tsunami', 'drought', 'pollution', 'emissions', 'carbon', 'glacier', 'sea level', 'famine', 'deforestation'];
+    const weatherWords = ['hurricane', 'typhoon', 'cyclone', 'tornado', 'storm', 'heatwave', 'blizzard', 'snowstorm', 'thunder'];
+    type = weatherWords.some(w => lower.includes(w)) ? 'weather'
+      : envWords.some(w => lower.includes(w)) ? 'environmental'
+      : marketWords.some(w => lower.includes(w)) ? 'market'
+      : 'environmental';
+  }
 
   return { type, severity };
 }
@@ -103,7 +112,7 @@ function newsToSignals(items: NewsItem[]): CrisisSignal[] {
     }
     usedCoords.add(coordKey);
 
-    const { type, severity } = classifyArticle(text);
+    const { type, severity } = classifyArticle(text, item.category);
 
     signals.push({
       id: `news-signal-${item.id}`,
@@ -212,7 +221,8 @@ export const usePolling = () => {
         description: a.description,
         source: a.source.name,
         publishedAt: a.publishedAt,
-        url: a.url
+        url: a.url,
+        category: a.category,
       }));
 
       if (items.length > 0) {
