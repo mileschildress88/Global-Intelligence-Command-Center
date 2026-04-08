@@ -315,6 +315,75 @@ app.get('/api/feargreed', async (req, res) => {
   }
 });
 
+// Forex — Frankfurter API (ECB data, free, no key, single call)
+app.get('/api/market/forex', async (req, res) => {
+  const cacheKey = 'forex_data';
+  const cached = cache.get(cacheKey);
+  if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
+  try {
+    // Two calls: today + yesterday for 24h change
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const [todayRes, yestRes] = await Promise.all([
+      axios.get('https://api.frankfurter.app/latest?from=USD', { timeout: 8000 }),
+      axios.get(`https://api.frankfurter.app/${yesterday}?from=USD`, { timeout: 8000 }),
+    ]);
+
+    const today = todayRes.data?.rates ?? {};
+    const yest  = yestRes.data?.rates ?? today;
+
+    // Frankfurter returns rates per 1 USD. Convert to standard pair notation.
+    const pair = (todayRate, yestRate) => ({
+      rate: todayRate,
+      change24h: yestRate ? ((todayRate - yestRate) / yestRate) * 100 : 0,
+    });
+
+    const result = {
+      eurUsd: pair(today.EUR ? +(1 / today.EUR).toFixed(5) : 0, yest.EUR ? 1 / yest.EUR : 0),
+      gbpUsd: pair(today.GBP ? +(1 / today.GBP).toFixed(5) : 0, yest.GBP ? 1 / yest.GBP : 0),
+      usdJpy: pair(today.JPY ? +today.JPY.toFixed(3) : 0,  yest.JPY ?? 0),
+      usdChf: pair(today.CHF ? +today.CHF.toFixed(5) : 0,  yest.CHF ?? 0),
+      audUsd: pair(today.AUD ? +(1 / today.AUD).toFixed(5) : 0, yest.AUD ? 1 / yest.AUD : 0),
+      usdCad: pair(today.CAD ? +today.CAD.toFixed(5) : 0,  yest.CAD ?? 0),
+    };
+
+    cache.set(cacheKey, result, 5 * 60);
+    res.json(result);
+  } catch (error) {
+    console.warn('Forex fetch failed:', error.message);
+    res.status(500).json({ error: 'Failed to fetch forex data' });
+  }
+});
+
+// GDELT Conflict Events — free, no key, 65k+ sources (gdeltproject.org)
+app.get('/api/gdelt', async (req, res) => {
+  const cacheKey = 'gdelt_data';
+  const cached = cache.get(cacheKey);
+  if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
+  try {
+    const query = 'conflict OR attack OR war OR protest OR coup OR explosion OR military OR bombing OR riot OR clash OR airstrike OR offensive OR siege OR invasion OR insurgent';
+    const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: {
+        query,
+        mode: 'artlist',
+        format: 'json',
+        maxrecords: 250,
+        sort: 'datedesc',
+        timespan: '24h',
+        sourcelang: 'english',
+      },
+      timeout: 12000,
+    });
+    const articles = r.data?.articles ?? [];
+    cache.set(cacheKey, articles, 15 * 60); // 15 min cache
+    res.json(articles);
+  } catch (error) {
+    console.warn('GDELT fetch failed:', error.message);
+    res.status(500).json({ error: 'Failed to fetch GDELT data' });
+  }
+});
+
 // Groq AI Proxy (free tier — get key at console.groq.com)
 app.post('/api/ai/analyze', async (req, res) => {
   const { prompt } = req.body;

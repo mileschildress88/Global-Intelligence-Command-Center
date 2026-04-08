@@ -136,18 +136,20 @@ export const usePolling = () => {
   const latestCryptoRef = useRef<any>(null);
   const latestStocksRef = useRef<any>(null);
   const latestCommoditiesRef = useRef<any>(null);
+  const latestForexRef = useRef<any>(null);
 
   // Refs to hold latest signals from each source so they can be merged
   const newsSignalsRef = useRef<CrisisSignal[]>([]);
   const earthquakeSignalsRef = useRef<CrisisSignal[]>([]);
+  const gdeltSignalsRef = useRef<CrisisSignal[]>([]);
 
   const mergeAndSetSignals = () => {
-    const combined = [...newsSignalsRef.current, ...earthquakeSignalsRef.current];
+    const combined = [...newsSignalsRef.current, ...earthquakeSignalsRef.current, ...gdeltSignalsRef.current];
     if (combined.length > 0) setSignals(combined, true);
   };
 
   // --- Market data merge ---
-  const applyMarketData = (crypto: any, stocks: any, commodities: any) => {
+  const applyMarketData = (crypto: any, stocks: any, commodities: any, forex: any) => {
     const mock = mockMarketData;
     const newData = {
       btc: crypto?.bitcoin ? { price: crypto.bitcoin.usd, change24h: crypto.bitcoin.usd_24h_change } : mock.btc,
@@ -158,8 +160,7 @@ export const usePolling = () => {
       vix: stocks?.['^VIX']?.['05. price'] ? { price: parseFloat(stocks['^VIX']['05. price']), change24h: parseFloat(stocks['^VIX']['10. change percent']) } : mock.vix,
       gold: commodities?.gold ?? mock.gold,
       oil: commodities?.oil ?? mock.oil,
-      eurUsd: 1.08,
-      gbpUsd: 1.26,
+      forex: (forex && Object.keys(forex).length > 0) ? forex : mock.forex,
     };
     setMarketData(newData, crypto !== null || commodities?.gold !== null);
     ['BTC', 'ETH', 'SOL', 'SPY', 'QQQ', 'VIX'].forEach(asset => {
@@ -173,7 +174,7 @@ export const usePolling = () => {
       const res = await axios.get(`${API_BASE}/market/crypto`);
       latestCryptoRef.current = res.data;
     } catch (e) { console.warn('Crypto API failed'); }
-    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current);
+    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current, latestForexRef.current);
   };
 
   // Alpha Vantage — every 4 hours (25 req/day limit)
@@ -182,7 +183,7 @@ export const usePolling = () => {
       const res = await axios.get(`${API_BASE}/market/stocks`);
       latestStocksRef.current = res.data;
     } catch (e) { console.warn('Stocks API failed'); }
-    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current);
+    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current, latestForexRef.current);
   };
 
   // Commodities (gold via CoinGecko PAXG + WTI via Yahoo Finance) — every 5 min
@@ -191,11 +192,61 @@ export const usePolling = () => {
       const res = await axios.get(`${API_BASE}/market/commodities`);
       latestCommoditiesRef.current = res.data;
     } catch (e) { console.warn('Commodities API failed'); }
-    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current);
+    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current, latestForexRef.current);
+  };
+
+  // Forex (Yahoo Finance v7 batch — 6 major pairs) — every 5 min
+  const fetchForex = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/market/forex`);
+      latestForexRef.current = res.data;
+    } catch (e) { console.warn('Forex API failed'); }
+    applyMarketData(latestCryptoRef.current, latestStocksRef.current, latestCommoditiesRef.current, latestForexRef.current);
+  };
+
+  // GDELT Conflict Events — free, no key, 65k+ global sources — every 15 min
+  const fetchGdelt = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/gdelt`);
+      const articles: any[] = Array.isArray(res.data) ? res.data : [];
+      const signals: CrisisSignal[] = [];
+      const usedCoords = new Set<string>();
+
+      for (const article of articles) {
+        if (!article.title) continue;
+        const loc = extractLocation(article.title);
+        if (!loc) continue;
+        let { lat, lng } = loc;
+        const coordKey = `${lat.toFixed(1)},${lng.toFixed(1)}`;
+        if (usedCoords.has(coordKey)) {
+          lat += (Math.random() - 0.5) * 4;
+          lng += (Math.random() - 0.5) * 4;
+        }
+        usedCoords.add(coordKey);
+        const { type, severity } = classifyArticle(article.title, 'global');
+        // Parse GDELT date format: "20240407T120000Z"
+        const raw = article.seendate ?? '';
+        const timestamp = raw.length >= 15
+          ? new Date(`${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}T${raw.slice(9,11)}:${raw.slice(11,13)}:${raw.slice(13,15)}Z`)
+          : new Date();
+        signals.push({
+          id: `gdelt-${article.url?.slice(-24) ?? Math.random()}`,
+          type,
+          severity,
+          lat, lng,
+          title: article.title.length > 80 ? article.title.slice(0, 77) + '…' : article.title,
+          body: `Reported by ${article.domain || 'international media'}.`,
+          source: article.domain || 'GDELT',
+          timestamp,
+        });
+      }
+      gdeltSignalsRef.current = signals;
+      mergeAndSetSignals();
+    } catch (e) { console.warn('GDELT fetch failed'); }
   };
 
   const fetchMarket = async () => {
-    await Promise.all([fetchCrypto(), fetchStocks(), fetchCommodities()]);
+    await Promise.all([fetchCrypto(), fetchStocks(), fetchCommodities(), fetchForex()]);
   };
 
   // --- CNN Fear & Greed ---
@@ -271,24 +322,34 @@ export const usePolling = () => {
       const goldPrice = state.marketData?.gold?.price || 'N/A';
       const sentiment = state.fearGreedLabel || 'Analyzing...';
       const topNews = state.newsItems.slice(0, 3).map(n => n.title).join('; ') || 'Awaiting headlines...';
+      const allSignals = state.signals;
+      const criticalSignals = allSignals.filter(s => s.severity === 'critical').slice(0, 3);
+      const warningSignals = allSignals.filter(s => s.severity === 'warning').slice(0, 2);
+      const topSignals = [...criticalSignals, ...warningSignals];
+      const signalSummary = topSignals.map(s => `[${s.severity.toUpperCase()}] ${s.title}`).join('; ') || 'No active alerts';
+
+      const forex = state.marketData?.forex;
+      const fxStr = forex ? `EUR/USD ${forex.eurUsd.rate.toFixed(4)} | GBP/USD ${forex.gbpUsd.rate.toFixed(4)} | USD/JPY ${forex.usdJpy.rate.toFixed(2)}` : '';
+      const oilPrice = state.marketData?.oil?.price || 'N/A';
 
       let prompt = '';
       if (signal) {
-        prompt = `You are a geopolitical intelligence analyst. Respond in plain text only — no markdown, no asterisks, no bullet points, no headers.
+        prompt = `You are a geopolitical intelligence analyst named Bob. Respond in plain text only — no markdown, no asterisks, no bullet points, no headers.
 
 EVENT: ${signal.title}
 DETAILS: ${signal.body}
-LOCATION: (${signal.lat}, ${signal.lng})
-MARKET CONTEXT: BTC $${btcPrice}, Gold $${goldPrice}/oz, Sentiment: ${sentiment}
+LOCATION: (${signal.lat.toFixed(2)}, ${signal.lng.toFixed(2)})
+MARKET CONTEXT: BTC $${btcPrice} | Gold $${goldPrice}/oz | Oil $${oilPrice}/bbl | Sentiment: ${sentiment}${fxStr ? `\nFOREX: ${fxStr}` : ''}
 
 Write 3-4 sentences of authoritative analysis. Explain how this event impacts regional stability and asset valuations. Be decisive and direct.`;
       } else {
-        prompt = `You are a global market intelligence analyst. Respond in plain text only — no markdown, no asterisks, no bullet points, no headers.
+        prompt = `You are Bob, an elite global intelligence analyst briefing an operations center. Respond in plain text only — no markdown, no asterisks, no bullet points, no headers.
 
-BTC: $${btcPrice} (${btcChange}% 24h) | Gold: $${goldPrice}/oz | Sentiment: ${sentiment}
-HEADLINES: ${topNews}
+MARKET SNAPSHOT: BTC $${btcPrice} (${btcChange}% 24h) | Gold $${goldPrice}/oz | Oil $${oilPrice}/bbl | Sentiment: ${sentiment}${fxStr ? `\nFOREX: ${fxStr}` : ''}
+TOP ACTIVE SIGNALS: ${signalSummary}
+KEY HEADLINES: ${topNews}
 
-Write 4 authoritative sentences synthesizing current global conditions. Identify a non-obvious connection between these headlines and asset volatility. End with a specific actionable recommendation.`;
+Deliver a 4-sentence global intelligence briefing. Identify the single most significant geopolitical or market risk active right now. Highlight a non-obvious connection between current signals and market conditions. End with a specific watch item for the next 24 hours.`;
       }
 
       const res = await axios.post(`${API_BASE}/ai/analyze`, { prompt });
@@ -321,26 +382,30 @@ Write 4 authoritative sentences synthesizing current global conditions. Identify
     isInitialized.current = true;
 
     const init = async () => {
-      await Promise.all([fetchFearGreed(), fetchMarket(), fetchNews(), fetchEarthquakes()]);
+      await Promise.all([fetchFearGreed(), fetchMarket(), fetchNews(), fetchEarthquakes(), fetchGdelt()]);
       runAIAnalysis();
     };
     init();
 
-    const cryptoInterval    = setInterval(fetchCrypto,       2 * 60 * 1000);
-    const stocksInterval    = setInterval(fetchStocks,       4 * 60 * 60 * 1000);
-    const commoditiesInterval = setInterval(fetchCommodities, 5 * 60 * 1000);
-    const fearGreedInterval = setInterval(fetchFearGreed,    10 * 60 * 1000);
-    const newsInterval      = setInterval(fetchNews,         5 * 60 * 1000);
-    const quakeInterval     = setInterval(fetchEarthquakes,  10 * 60 * 1000); // USGS updates ~every 5 min
-    const aiInterval        = setInterval(() => runAIAnalysis(), 5 * 60 * 1000);
+    const cryptoInterval      = setInterval(fetchCrypto,       2 * 60 * 1000);
+    const stocksInterval      = setInterval(fetchStocks,       4 * 60 * 60 * 1000);
+    const commoditiesInterval = setInterval(fetchCommodities,  5 * 60 * 1000);
+    const forexInterval       = setInterval(fetchForex,        5 * 60 * 1000);
+    const fearGreedInterval   = setInterval(fetchFearGreed,    10 * 60 * 1000);
+    const newsInterval        = setInterval(fetchNews,         5 * 60 * 1000);
+    const quakeInterval       = setInterval(fetchEarthquakes,  10 * 60 * 1000);
+    const gdeltInterval       = setInterval(fetchGdelt,        15 * 60 * 1000); // GDELT updates every 15 min
+    const aiInterval          = setInterval(() => runAIAnalysis(), 5 * 60 * 1000);
 
     return () => {
       clearInterval(cryptoInterval);
       clearInterval(stocksInterval);
       clearInterval(commoditiesInterval);
+      clearInterval(forexInterval);
       clearInterval(fearGreedInterval);
       clearInterval(newsInterval);
       clearInterval(quakeInterval);
+      clearInterval(gdeltInterval);
       clearInterval(aiInterval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

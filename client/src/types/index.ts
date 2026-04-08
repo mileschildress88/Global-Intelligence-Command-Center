@@ -16,6 +16,20 @@ export type AssetData = {
   change24h: number;
 };
 
+export type ForexPair = {
+  rate: number;
+  change24h: number;
+};
+
+export type ForexData = {
+  eurUsd: ForexPair;
+  gbpUsd: ForexPair;
+  usdJpy: ForexPair;
+  usdChf: ForexPair;
+  audUsd: ForexPair;
+  usdCad: ForexPair;
+};
+
 export type MarketData = {
   btc: AssetData;
   eth: AssetData;
@@ -25,8 +39,7 @@ export type MarketData = {
   vix: AssetData;
   gold: AssetData;
   oil: AssetData;
-  eurUsd: number;
-  gbpUsd: number;
+  forex: ForexData;
 };
 
 export type NewsItem = {

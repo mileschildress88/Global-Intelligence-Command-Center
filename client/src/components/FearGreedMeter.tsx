@@ -43,11 +43,11 @@ const FearGreedMeter: React.FC = () => {
   const prevMonthArrow  = trendArrow(fearGreedScore, fearGreedPrevMonth);
 
   return (
-    <div className="bg-[#111320]/80 backdrop-blur-md border border-white/10 rounded-xl p-4 shadow-2xl">
+    <div className="bg-white/[0.02] border border-white/[0.07] rounded-xl p-3.5">
       {/* Header */}
       <div className="flex justify-between items-center mb-3">
-        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Fear & Greed Index</span>
-        <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest bg-white/5 px-1.5 py-0.5 rounded border border-white/5">CNN</span>
+        <span className="text-[8px] font-black text-white/25 uppercase tracking-[0.18em]">Fear & Greed Index</span>
+        <span className="text-[7px] font-black text-white/20 uppercase tracking-widest bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.06]">CNN</span>
       </div>
 
       {/* Score + label */}
@@ -81,19 +81,19 @@ const FearGreedMeter: React.FC = () => {
       </div>
 
       {/* Previous period comparisons */}
-      <div className="grid grid-cols-3 gap-1.5 border-t border-white/5 pt-3">
+      <div className="grid grid-cols-3 gap-1.5 border-t border-white/[0.06] pt-3">
         {[
-          { label: 'PREV CLOSE', score: fearGreedPrevClose, trend: prevCloseArrow },
-          { label: 'PREV WEEK',  score: fearGreedPrevWeek,  trend: prevWeekArrow  },
-          { label: 'PREV MONTH', score: fearGreedPrevMonth, trend: prevMonthArrow },
+          { label: 'Prev Close', score: fearGreedPrevClose, trend: prevCloseArrow },
+          { label: 'Prev Week',  score: fearGreedPrevWeek,  trend: prevWeekArrow  },
+          { label: 'Prev Month', score: fearGreedPrevMonth, trend: prevMonthArrow },
         ].map(({ label, score, trend }) => (
-          <div key={label} className="bg-white/5 rounded-lg px-2 py-1.5 text-center">
-            <div className="text-[7px] font-bold text-gray-600 uppercase tracking-widest mb-0.5">{label}</div>
+          <div key={label} className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-2 py-1.5 text-center">
+            <div className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-0.5">{label}</div>
             <div className="flex items-center justify-center space-x-0.5">
               <span className={`text-[8px] font-black ${trend.color}`}>{trend.arrow}</span>
-              <span className="text-[12px] font-black text-gray-300 tabular-nums">{Math.round(score)}</span>
+              <span className="text-[13px] font-black text-white/80 tabular-nums">{Math.round(score)}</span>
             </div>
-            <div className="text-[7px] font-medium mt-0.5" style={{ color: getZone(score).color }}>
+            <div className="text-[7px] font-bold mt-0.5" style={{ color: getZone(score).color }}>
               {getZone(score).label.split(' ')[0]}
             </div>
           </div>

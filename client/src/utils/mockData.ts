@@ -70,8 +70,14 @@ export const mockMarketData: MarketData = {
   vix: { price: 14.5, change24h: 3.2 },
   gold: { price: 3180.0, change24h: 0.52 },
   oil: { price: 110.34, change24h: -2.31 },
-  eurUsd: 1.0854,
-  gbpUsd: 1.2645
+  forex: {
+    eurUsd: { rate: 1.0854, change24h: 0.12 },
+    gbpUsd: { rate: 1.2645, change24h: -0.08 },
+    usdJpy: { rate: 151.42, change24h: 0.31 },
+    usdChf: { rate: 0.9012, change24h: -0.15 },
+    audUsd: { rate: 0.6521, change24h: 0.22 },
+    usdCad: { rate: 1.3614, change24h: 0.09 },
+  }
 };
 
 export const mockNews: NewsItem[] = [
