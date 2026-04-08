@@ -35,7 +35,7 @@ const AIAnalysisBar: React.FC = () => {
     <div className="bg-[#111320] border-t border-white/5 p-4 flex items-start space-x-4 min-h-[5rem] max-h-40">
       {/* Bob */}
       <div className="flex-shrink-0 flex flex-col items-center justify-center pt-0.5">
-        <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 shadow-lg shadow-blue-500/10 bg-[#0d0f1c]">
+        <div className="w-16 h-16 rounded-full overflow-hidden border border-white/10 shadow-lg shadow-blue-500/10 bg-[#0d0f1c]">
           <img
             src={isActive ? '/textures/robot-idle.gif' : '/textures/robot-idle still.jpg'}
             alt="Bob"
